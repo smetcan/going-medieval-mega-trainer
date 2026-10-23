@@ -29,7 +29,7 @@ using NSMedieval.Village;
 
 namespace GoingMedievalTrainer
 {
-    [BepInPlugin("com.selcuk.goingmedieval.megatrainer", "Going Medieval Mega Trainer (TR)", "1.4.0")]
+    [BepInPlugin("com.selcuk.goingmedieval.megatrainer", "Going Medieval Mega Trainer (EN/TR)", "1.5.0")]
     public class MegaTrainerPlugin : BaseUnityPlugin
     {
         internal static ManualLogSource Log;
@@ -41,15 +41,15 @@ namespace GoingMedievalTrainer
             {
                 var harmony = new Harmony("com.selcuk.goingmedieval.megatrainer.harmony");
                 harmony.PatchAll(typeof(TrainerHarmonyPatches));
-                Log.LogInfo("Harmony yamaları başarıyla uygulandı.");
+                Log.LogInfo("Harmony patches applied successfully.");
             }
             catch (Exception ex)
             {
-                Log.LogError("Harmony yama hatası: " + ex);
+                Log.LogError("Harmony patch error: " + ex);
             }
 
             TrainerHarmonyPatches.EnsureTrainerHost();
-            Log.LogInfo("Going Medieval Mega Trainer (TR) v1.4.0 yüklendi! [F1] Menü | [F9] Hot-Reload");
+            Log.LogInfo("Going Medieval Mega Trainer (EN/TR) v1.5.0 loaded! [F1] Menu | [F9] Hot-Reload");
         }
     }
 
@@ -146,12 +146,29 @@ namespace GoingMedievalTrainer
     {
         public static MegaTrainerBehaviour Instance { get; private set; }
 
+        // Dil Durumu: Varsayılan İngilizce (_isTurkish = false)
+        private bool _isTurkish = false;
+        private string L(string en, string tr) => _isTurkish ? tr : en;
+        private string OnOff(bool state) => state ? L("ON", "AÇIK") : L("OFF", "KAPALI");
+
         // Pencere ve UI Durumu
         private bool _showMenu = false;
         private bool _showMiniBadge = true;
-        private Rect _windowRect = new Rect(40f, 60f, 740f, 660f);
+        private Rect _windowRect = new Rect(40f, 60f, 750f, 665f);
         private int _selectedTab = 0;
-        private readonly string[] _tabs = new string[]
+
+        private static readonly string[] TabsEN = new string[]
+        {
+            "Settlers",
+            "Build & Craft",
+            "Items & Storage",
+            "Combat & Animals",
+            "Time & Weather",
+            "Dev Console",
+            "📋 Logs"
+        };
+
+        private static readonly string[] TabsTR = new string[]
         {
             "Köylüler",
             "İnşaat & Üretim",
@@ -161,6 +178,8 @@ namespace GoingMedievalTrainer
             "Dev Konsol",
             "📋 Loglar"
         };
+
+        private string[] CurrentTabs => _isTurkish ? TabsTR : TabsEN;
 
         // Sürekli Aktif (Loop) Hile Bayrakları
         public static bool GodModeAllSettlers = false;
@@ -187,7 +206,7 @@ namespace GoingMedievalTrainer
 
         // Dev Konsol Özel Komut
         private string _customConsoleCommand = "help";
-        private string _statusMessage = "Mega Trainer v1.4.0 Hazır! [F1] Menü | [F9] Canlı Yenile (Hot-Reload)";
+        private string _statusMessage = "Mega Trainer v1.5.0 Ready! [F1] Menu | [F9] Hot-Reload";
         private float _statusTimer = 0f;
 
         // Canlı Yenileme (Hot-Reload) Durumu
@@ -199,7 +218,7 @@ namespace GoingMedievalTrainer
         private string _hotReloadDllPath;
 
         // Tıklama -> Durum Loglama Yapısı
-        private string _lastClickedAction = "Başlangıç";
+        private string _lastClickedAction = "Startup";
         private readonly List<string> _actionStatusLogs = new List<string>();
         private string _logFilePath;
 
@@ -234,6 +253,12 @@ namespace GoingMedievalTrainer
 
             try
             {
+                // Varsayılan olarak İngilizce (0) açılır; kullanıcı değiştirdiyse PlayerPrefs'ten okur
+                _isTurkish = PlayerPrefs.GetInt("GM_MegaTrainer_LangTR", 0) == 1;
+                _statusMessage = L(
+                    "Mega Trainer v1.5.0 Ready! [F1] Menu | [F9] Hot-Reload",
+                    "Mega Trainer v1.5.0 Hazır! [F1] Menü | [F9] Canlı Yenile (Hot-Reload)");
+
                 _hotReloadDllPath = Path.Combine(Paths.BepInExRootPath, "TrainerHotReload.dll");
                 if (File.Exists(_hotReloadDllPath))
                 {
@@ -252,12 +277,11 @@ namespace GoingMedievalTrainer
                 if (!_isHotReloadedInstance)
                 {
                     string header = $"================================================================================{Environment.NewLine}" +
-                                    $"Going Medieval Mega Trainer v1.4.0 - Oturum Başlangıcı: {DateTime.Now:yyyy-MM-dd HH:mm:ss}{Environment.NewLine}" +
-                                    $"Format: [Saat] | Tıklanan: <Buton/Kısayol> ==> Durum: <Sonuç>{Environment.NewLine}" +
+                                    $"Going Medieval Mega Trainer v1.5.0 - Session Start: {DateTime.Now:yyyy-MM-dd HH:mm:ss}{Environment.NewLine}" +
+                                    $"Format: [Time] | Action: <Button/Hotkey> ==> Status: <Result>{Environment.NewLine}" +
                                     $"================================================================================{Environment.NewLine}";
                     File.AppendAllText(_logFilePath, header, Encoding.UTF8);
 
-                    // Eğer oyun kapalıyken veya önceki oturumda TrainerHotReload.dll güncellenmişse ve plugins\GoingMedievalTrainer.dll eski kalmışsa, açılışta otomatik yükselt
                     string pluginDllPath = Path.Combine(Paths.PluginPath, "GoingMedievalTrainer.dll");
                     if (!string.IsNullOrEmpty(_hotReloadDllPath) && File.Exists(_hotReloadDllPath) && File.Exists(pluginDllPath))
                     {
@@ -265,7 +289,7 @@ namespace GoingMedievalTrainer
                         DateTime plugTime = File.GetLastWriteTimeUtc(pluginDllPath);
                         if (hotTime > plugTime.AddSeconds(2))
                         {
-                            _lastClickedAction = "[Otomatik Başlangıç Güncellemesi]";
+                            _lastClickedAction = L("[Auto Startup Upgrade]", "[Otomatik Başlangıç Güncellemesi]");
                             HotReloadTrainerNow(true);
                         }
                     }
@@ -277,6 +301,19 @@ namespace GoingMedievalTrainer
         private void OnDestroy()
         {
             if (Instance == this) Instance = null;
+        }
+
+        private void ToggleLanguage()
+        {
+            _isTurkish = !_isTurkish;
+            try
+            {
+                PlayerPrefs.SetInt("GM_MegaTrainer_LangTR", _isTurkish ? 1 : 0);
+                PlayerPrefs.Save();
+            }
+            catch { }
+            _lastClickedAction = L("[Top Bar] Language Switch (EN)", "[Üst Bar] Dil Değiştir (TR)");
+            SetStatus(L("Language switched to English (EN).", "Dil Türkçe (TR) olarak değiştirildi."));
         }
 
         private void Update()
@@ -294,46 +331,46 @@ namespace GoingMedievalTrainer
                 // Hızlı Kısayol Tuşları
                 if (Input.GetKeyDown(KeyCode.F2))
                 {
-                    _lastClickedAction = "[Kısayol F2] Orijinal Geliştirici Paneli";
+                    _lastClickedAction = L("[Hotkey F2] Native Developer Panel", "[Kısayol F2] Orijinal Geliştirici Paneli");
                     ToggleNativeDevTools();
                 }
                 if (Input.GetKeyDown(KeyCode.F3))
                 {
-                    _lastClickedAction = "[Kısayol F3] Ölümsüzlük (God Mode)";
+                    _lastClickedAction = L("[Hotkey F3] God Mode", "[Kısayol F3] Ölümsüzlük (God Mode)");
                     GodModeAllSettlers = !GodModeAllSettlers;
                     if (GodModeAllSettlers) ApplyGodModeAndHealNow();
-                    SetStatus("Ölümsüzlük (God Mode): " + (GodModeAllSettlers ? "AÇIK" : "KAPALI"));
+                    SetStatus(L("God Mode & Auto-Heal: ", "Ölümsüzlük (God Mode): ") + OnOff(GodModeAllSettlers));
                 }
                 if (Input.GetKeyDown(KeyCode.F4))
                 {
-                    _lastClickedAction = "[Kısayol F4] Sonsuz İhtiyaçlar & %100 Moral";
+                    _lastClickedAction = L("[Hotkey F4] Infinite Needs & 100% Mood", "[Kısayol F4] Sonsuz İhtiyaçlar & %100 Moral");
                     InfiniteNeedsAllSettlers = !InfiniteNeedsAllSettlers;
                     if (InfiniteNeedsAllSettlers) ApplyInfiniteNeedsNow();
-                    SetStatus("Sonsuz İhtiyaçlar & %100 Moral: " + (InfiniteNeedsAllSettlers ? "AÇIK" : "KAPALI"));
+                    SetStatus(L("Infinite Needs & 100% Mood: ", "Sonsuz İhtiyaçlar & %100 Moral: ") + OnOff(InfiniteNeedsAllSettlers));
                 }
                 if (Input.GetKeyDown(KeyCode.F5))
                 {
-                    _lastClickedAction = "[Kısayol F5] Tüm Hızlı İnşa/Kazı Hileleri";
+                    _lastClickedAction = L("[Hotkey F5] All Fast Build/Dig Cheats", "[Kısayol F5] Tüm Hızlı İnşa/Kazı Hileleri");
                     ToggleAllFastBuildCheats();
                 }
                 if (Input.GetKeyDown(KeyCode.F6))
                 {
-                    _lastClickedAction = "[Kısayol F6] Haritadaki Tüm İnşaat Planlarını Bitir";
+                    _lastClickedAction = L("[Hotkey F6] Finish All Blueprints", "[Kısayol F6] Haritadaki Tüm İnşaat Planlarını Bitir");
                     FinishAllBlueprintsNow();
                 }
                 if (Input.GetKeyDown(KeyCode.F7))
                 {
-                    _lastClickedAction = "[Kısayol F7] Mevcut Tüm Yığınları Maksimuma Doldur";
+                    _lastClickedAction = L("[Hotkey F7] Refill All Stockpiles", "[Kısayol F7] Mevcut Tüm Yığınları Maksimuma Doldur");
                     RefillAllStockpilesAndFreshness();
                 }
                 if (Input.GetKeyDown(KeyCode.F8))
                 {
-                    _lastClickedAction = "[Kısayol F8] Haritadaki Tüm Düşmanları Öldür";
+                    _lastClickedAction = L("[Hotkey F8] Kill All Enemies", "[Kısayol F8] Haritadaki Tüm Düşmanları Öldür");
                     KillAllEnemiesNow();
                 }
                 if (Input.GetKeyDown(KeyCode.F9))
                 {
-                    _lastClickedAction = "[Kısayol F9] Canlı Yenile (Hot-Reload)";
+                    _lastClickedAction = L("[Hotkey F9] Hot-Reload", "[Kısayol F9] Canlı Yenile (Hot-Reload)");
                     HotReloadTrainerNow(false);
                     return;
                 }
@@ -355,7 +392,7 @@ namespace GoingMedievalTrainer
                             DateTime writeUtc = File.GetLastWriteTimeUtc(_hotReloadDllPath);
                             if (writeUtc > _lastHotReloadWriteUtc.AddSeconds(0.5))
                             {
-                                _lastClickedAction = "[Otomatik Hot-Reload Algılandı]";
+                                _lastClickedAction = L("[Auto Hot-Reload Detected]", "[Otomatik Hot-Reload Algılandı]");
                                 HotReloadTrainerNow(true);
                                 return;
                             }
@@ -373,7 +410,7 @@ namespace GoingMedievalTrainer
             }
             catch (Exception ex)
             {
-                MegaTrainerPlugin.Log?.LogWarning("Trainer Update Hatası: " + ex.Message);
+                MegaTrainerPlugin.Log?.LogWarning("Trainer Update Error: " + ex.Message);
             }
         }
 
@@ -416,17 +453,19 @@ namespace GoingMedievalTrainer
                 {
                     MonoSingleton<ProductionManager>.Instance.GlobalSpeedMultiplier = speed;
                     SetStatus(speed <= 1.05f
-                        ? "Global Tezgah Üretim Hızı 1x (Normal) yapıldı."
-                        : $"Global Tezgah Üretim Hızı {speed:0}x yapıldı!");
+                        ? L("Global Workbench Production Speed reset to 1x (Normal).", "Global Tezgah Üretim Hızı 1x (Normal) yapıldı.")
+                        : L($"Global Workbench Production Speed set to {speed:0}x!", $"Global Tezgah Üretim Hızı {speed:0}x yapıldı!"));
                 }
                 else
                 {
-                    SetStatus($"Üretim Hızı {speed:0}x olarak ayarlandı (haritaya girince aktif olacak).");
+                    SetStatus(L(
+                        $"Production Speed set to {speed:0}x (will apply when in a map).",
+                        $"Üretim Hızı {speed:0}x olarak ayarlandı (haritaya girince aktif olacak)."));
                 }
             }
             catch (Exception ex)
             {
-                SetStatus("Üretim hızı hatası: " + ex.Message, ex);
+                SetStatus(L("Production speed error: ", "Üretim hızı hatası: ") + ex.Message, ex);
             }
         }
 
@@ -444,9 +483,10 @@ namespace GoingMedievalTrainer
 
         private string CurrentTabName()
         {
-            if (_selectedTab >= 0 && _selectedTab < _tabs.Length)
-                return _tabs[_selectedTab];
-            return "Genel";
+            var tabs = CurrentTabs;
+            if (_selectedTab >= 0 && _selectedTab < tabs.Length)
+                return tabs[_selectedTab];
+            return L("General", "Genel");
         }
 
         private bool TrainerButton(string text, params GUILayoutOption[] options)
@@ -461,11 +501,11 @@ namespace GoingMedievalTrainer
 
         private bool DrawToggleButton(string text, bool active)
         {
-            string prefix = active ? "[✔ AÇIK] " : "[✘ KAPALI] ";
+            string prefix = active ? L("[✔ ON] ", "[✔ AÇIK] ") : L("[✘ OFF] ", "[✘ KAPALI] ");
             GUIStyle style = active ? _activeButtonStyle : _buttonStyle;
             if (GUILayout.Button(prefix + text, style, GUILayout.Height(32f)))
             {
-                _lastClickedAction = $"[{CurrentTabName()}] {text} (Önceki: {(active ? "AÇIK" : "KAPALI")})";
+                _lastClickedAction = $"[{CurrentTabName()}] {text} ({L("Prev", "Önceki")}: {OnOff(active)})";
                 return true;
             }
             return false;
@@ -477,10 +517,10 @@ namespace GoingMedievalTrainer
             _statusTimer = 8f;
 
             string timestamp = DateTime.Now.ToString("HH:mm:ss.fff");
-            string logLine = $"[{timestamp}] | Tıklanan: {_lastClickedAction} ==> Durum: {msg}";
+            string logLine = $"[{timestamp}] | {L("Action", "Tıklanan")}: {_lastClickedAction} ==> {L("Status", "Durum")}: {msg}";
             if (ex != null)
             {
-                logLine += $" | Hata Detayı: {ex.GetType().Name}: {ex.Message} ({ex.StackTrace?.Split('\n').FirstOrDefault()?.Trim()})";
+                logLine += $" | {L("Error", "Hata Detayı")}: {ex.GetType().Name}: {ex.Message} ({ex.StackTrace?.Split('\n').FirstOrDefault()?.Trim()})";
             }
 
             _actionStatusLogs.Add(logLine);
@@ -584,7 +624,7 @@ namespace GoingMedievalTrainer
 
             if (_showMiniBadge && !_showMenu)
             {
-                if (GUI.Button(new Rect(12f, 12f, 195f, 28f), "⚔ Mega Trainer v1.4.0 [F1]", _buttonStyle))
+                if (GUI.Button(new Rect(12f, 12f, 200f, 28f), "⚔ Mega Trainer v1.5.0 [F1]", _buttonStyle))
                 {
                     _showMenu = true;
                 }
@@ -592,7 +632,10 @@ namespace GoingMedievalTrainer
 
             if (!_showMenu) return;
 
-            _windowRect = GUILayout.Window(987654, _windowRect, DrawTrainerWindow, "⚔ GOING MEDIEVAL - MEGA TRAINER v1.4.0 (TR) [Hot-Reload Aktif] ⚔", _windowStyle);
+            string title = L(
+                "⚔ GOING MEDIEVAL - MEGA TRAINER v1.5.0 (EN) [Hot-Reload Active] ⚔",
+                "⚔ GOING MEDIEVAL - MEGA TRAINER v1.5.0 (TR) [Hot-Reload Aktif] ⚔");
+            _windowRect = GUILayout.Window(987654, _windowRect, DrawTrainerWindow, title, _windowStyle);
         }
 
         private void DrawTrainerWindow(int windowID)
@@ -600,10 +643,20 @@ namespace GoingMedievalTrainer
             GUILayout.Space(4f);
 
             GUILayout.BeginHorizontal();
-            GUILayout.Label("Kısayollar: [F1] Menü | [F2] DevPanel | [F3] Ölümsüzlük | [F4] İhtiyaçlar | [F5] Hızlı İnşa | [F6] PlanBitir | [F7] Depo | [F8] Öldür | [F9] Yenile", _labelStyle);
-            if (GUILayout.Button("🔄 Yenile [F9]", _activeButtonStyle, GUILayout.Width(105f), GUILayout.Height(24f)))
+            GUILayout.Label(
+                L(
+                    "Hotkeys: [F1] Menu | [F2] DevPanel | [F3] GodMode | [F4] Needs | [F5] FastBuild | [F6] FinishPlans | [F7] Refill | [F8] Kill | [F9] Reload",
+                    "Kısayollar: [F1] Menü | [F2] DevPanel | [F3] Ölümsüzlük | [F4] İhtiyaçlar | [F5] Hızlıİnşa | [F6] PlanBitir | [F7] Depo | [F8] Öldür | [F9] Yenile"),
+                _labelStyle);
+
+            if (GUILayout.Button(_isTurkish ? "🌐 Dil: TR ➔ EN" : "🌐 Lang: EN ➔ TR", _activeTabButtonStyle, GUILayout.Width(120f), GUILayout.Height(24f)))
             {
-                _lastClickedAction = "[Üst Bar] 🔄 Yenile [F9]";
+                ToggleLanguage();
+            }
+
+            if (GUILayout.Button(L("🔄 Reload [F9]", "🔄 Yenile [F9]"), _activeButtonStyle, GUILayout.Width(105f), GUILayout.Height(24f)))
+            {
+                _lastClickedAction = L("[Top Bar] 🔄 Reload [F9]", "[Üst Bar] 🔄 Yenile [F9]");
                 HotReloadTrainerNow(false);
                 GUIUtility.ExitGUI();
                 return;
@@ -614,11 +667,12 @@ namespace GoingMedievalTrainer
             }
             GUILayout.EndHorizontal();
 
+            var tabs = CurrentTabs;
             GUILayout.BeginHorizontal();
-            for (int i = 0; i < _tabs.Length; i++)
+            for (int i = 0; i < tabs.Length; i++)
             {
                 GUIStyle st = (_selectedTab == i) ? _activeTabButtonStyle : _tabButtonStyle;
-                if (GUILayout.Button(_tabs[i], st, GUILayout.Height(32f)))
+                if (GUILayout.Button(tabs[i], st, GUILayout.Height(32f)))
                 {
                     _selectedTab = i;
                 }
@@ -630,7 +684,11 @@ namespace GoingMedievalTrainer
             if (!IsInActiveGameplay() && _selectedTab != 5 && _selectedTab != 6)
             {
                 GUILayout.BeginVertical(_sectionStyle);
-                GUILayout.Label("⚠ Şu anda aktif bir köy/harita yüklü değil. Lütfen bir kayıt (save) yükleyin veya yeni oyun başlatın.", _headerStyle);
+                GUILayout.Label(
+                    L(
+                        "⚠ No active settlement/map loaded right now. Please load a save or start a new game.",
+                        "⚠ Şu anda aktif bir köy/harita yüklü değil. Lütfen bir kayıt (save) yükleyin veya yeni oyun başlatın."),
+                    _headerStyle);
                 GUILayout.EndVertical();
             }
 
@@ -648,18 +706,21 @@ namespace GoingMedievalTrainer
             GUILayout.FlexibleSpace();
 
             GUILayout.BeginHorizontal(_statusStyle);
-            GUILayout.Label("Durum: " + _statusMessage, _statusStyle);
-            if (GUILayout.Button(_autoHotReload ? "⚡ Oto-Yenile: AÇIK" : "⚡ Oto-Yenile: KAPALI", _autoHotReload ? _activeButtonStyle : _buttonStyle, GUILayout.Width(135f)))
+            GUILayout.Label(L("Status: ", "Durum: ") + _statusMessage, _statusStyle);
+            if (GUILayout.Button(
+                _autoHotReload ? L("⚡ Auto-Reload: ON", "⚡ Oto-Yenile: AÇIK") : L("⚡ Auto-Reload: OFF", "⚡ Oto-Yenile: KAPALI"),
+                _autoHotReload ? _activeButtonStyle : _buttonStyle,
+                GUILayout.Width(140f)))
             {
                 _autoHotReload = !_autoHotReload;
-                _lastClickedAction = "[Alt Bar] Oto-Yenile (Auto Hot-Reload)";
-                SetStatus("Otomatik Canlı Yenileme (Auto Hot-Reload): " + (_autoHotReload ? "AÇIK" : "KAPALI"));
+                _lastClickedAction = L("[Bottom Bar] Auto Hot-Reload", "[Alt Bar] Oto-Yenile (Auto Hot-Reload)");
+                SetStatus(L("Auto Hot-Reload: ", "Otomatik Canlı Yenileme: ") + OnOff(_autoHotReload));
             }
-            if (GUILayout.Button("📋 Loglar (" + _actionStatusLogs.Count + ")", _buttonStyle, GUILayout.Width(105f)))
+            if (GUILayout.Button(L("📋 Logs (", "📋 Loglar (") + _actionStatusLogs.Count + ")", _buttonStyle, GUILayout.Width(105f)))
             {
                 _selectedTab = 6;
             }
-            if (GUILayout.Button(_showMiniBadge ? "Rozeti Gizle" : "Rozeti Göster", _buttonStyle, GUILayout.Width(100f)))
+            if (GUILayout.Button(_showMiniBadge ? L("Hide Badge", "Rozeti Gizle") : L("Show Badge", "Rozeti Göster"), _buttonStyle, GUILayout.Width(100f)))
             {
                 _showMiniBadge = !_showMiniBadge;
             }
@@ -696,14 +757,24 @@ namespace GoingMedievalTrainer
             _productionSpeedMultiplier = prodMult;
             _lastHotReloadWriteUtc = hotWriteUtc;
 
+            try
+            {
+                _isTurkish = PlayerPrefs.GetInt("GM_MegaTrainer_LangTR", 0) == 1;
+            }
+            catch { }
+
             if (logs != null && logs.Count > 0)
             {
                 _actionStatusLogs.Clear();
                 _actionStatusLogs.AddRange(logs);
             }
 
-            _lastClickedAction = isAutoTrigger ? "[Otomatik Canlı Yenileme]" : "[F9 / Canlı Yenile Butonu]";
-            SetStatus($"Canlı Yenileme (Hot-Reload) tamamlandı! [Sürüm v1.4.0 - {DateTime.Now:HH:mm:ss}]");
+            _lastClickedAction = isAutoTrigger
+                ? L("[Auto Hot-Reload]", "[Otomatik Canlı Yenileme]")
+                : L("[F9 / Reload Button]", "[F9 / Canlı Yenile Butonu]");
+            SetStatus(L(
+                $"Hot-Reload completed! [Version v1.5.0 (EN/TR) - {DateTime.Now:HH:mm:ss}]",
+                $"Canlı Yenileme (Hot-Reload) tamamlandı! [Sürüm v1.5.0 (EN/TR) - {DateTime.Now:HH:mm:ss}]"));
         }
 
         private void HotReloadTrainerNow(bool isAutoTrigger)
@@ -717,7 +788,7 @@ namespace GoingMedievalTrainer
 
                 if (!File.Exists(_hotReloadDllPath))
                 {
-                    SetStatus("TrainerHotReload.dll bulunamadı: " + _hotReloadDllPath);
+                    SetStatus(L("TrainerHotReload.dll not found: ", "TrainerHotReload.dll bulunamadı: ") + _hotReloadDllPath);
                     return;
                 }
 
@@ -731,18 +802,18 @@ namespace GoingMedievalTrainer
 
                 if (newBehaviourType == null)
                 {
-                    SetStatus("Hot-Reload hatası: Yeni derlemede MegaTrainerBehaviour sınıfı bulunamadı!");
+                    SetStatus(L(
+                        "Hot-Reload error: MegaTrainerBehaviour class not found in new assembly!",
+                        "Hot-Reload hatası: Yeni derlemede MegaTrainerBehaviour sınıfı bulunamadı!"));
                     return;
                 }
 
-                // Log kaynağını yeni assembly'ye aktar
                 if (newPluginType != null)
                 {
                     FieldInfo fiLog = newPluginType.GetField("Log", BindingFlags.Static | BindingFlags.NonPublic | BindingFlags.Public);
                     fiLog?.SetValue(null, MegaTrainerPlugin.Log);
                 }
 
-                // Eski Harmony yamalarını kaldır ve yeni derlemenin yamalarını uygula
                 try
                 {
                     Harmony.UnpatchID("com.selcuk.goingmedieval.megatrainer.harmony");
@@ -754,10 +825,9 @@ namespace GoingMedievalTrainer
                 }
                 catch (Exception hex)
                 {
-                    MegaTrainerPlugin.Log?.LogWarning("Hot-Reload Harmony yama yenileme uyarısı: " + hex.Message);
+                    MegaTrainerPlugin.Log?.LogWarning("Hot-Reload Harmony patch warning: " + hex.Message);
                 }
 
-                // Mevcut örnek bayraklarını devre dışı bırak ve yeni bileşeni aynı GameObject üzerine ekle
                 _isReplacedByHotReload = true;
                 if (Instance == this) Instance = null;
 
@@ -789,39 +859,39 @@ namespace GoingMedievalTrainer
             {
                 _isReplacedByHotReload = false;
                 if (Instance == null) Instance = this;
-                SetStatus("Hot-Reload hatası: " + ex.Message, ex);
+                SetStatus(L("Hot-Reload error: ", "Hot-Reload hatası: ") + ex.Message, ex);
             }
         }
 
         private void DrawSettlersTab()
         {
             GUILayout.BeginVertical(_sectionStyle);
-            GUILayout.Label("🛡 Sürekli Aktif Köylü Korumaları (Aç / Kapat)", _headerStyle);
+            GUILayout.Label(L("🛡 Continuous Settler Protections (Toggle)", "🛡 Sürekli Aktif Köylü Korumaları (Aç / Kapat)"), _headerStyle);
 
             GUILayout.BeginHorizontal();
-            if (DrawToggleButton("Ölümsüzlük & Otomatik Tedavi [F3]", GodModeAllSettlers))
+            if (DrawToggleButton(L("God Mode & Auto-Heal [F3]", "Ölümsüzlük & Otomatik Tedavi [F3]"), GodModeAllSettlers))
             {
                 GodModeAllSettlers = !GodModeAllSettlers;
                 if (GodModeAllSettlers) ApplyGodModeAndHealNow();
-                SetStatus("Ölümsüzlük: " + (GodModeAllSettlers ? "AÇIK" : "KAPALI"));
+                SetStatus(L("God Mode: ", "Ölümsüzlük: ") + OnOff(GodModeAllSettlers));
             }
-            if (DrawToggleButton("Sonsuz İhtiyaçlar & %100 Moral [F4]", InfiniteNeedsAllSettlers))
+            if (DrawToggleButton(L("Infinite Needs & 100% Mood [F4]", "Sonsuz İhtiyaçlar & %100 Moral [F4]"), InfiniteNeedsAllSettlers))
             {
                 InfiniteNeedsAllSettlers = !InfiniteNeedsAllSettlers;
                 if (InfiniteNeedsAllSettlers) ApplyInfiniteNeedsNow();
-                SetStatus("Sonsuz İhtiyaçlar & Moral: " + (InfiniteNeedsAllSettlers ? "AÇIK" : "KAPALI"));
+                SetStatus(L("Infinite Needs & Mood: ", "Sonsuz İhtiyaçlar & Moral: ") + OnOff(InfiniteNeedsAllSettlers));
             }
             GUILayout.EndHorizontal();
 
             GUILayout.Space(4f);
             GUILayout.BeginHorizontal();
-            if (DrawToggleButton($"Süper Hız & Çalışma Çarpanı ({_settlerSpeedMultiplier:0}x)", _superSpeedSettlers))
+            if (DrawToggleButton(L($"Super Movement & Work Speed ({_settlerSpeedMultiplier:0}x)", $"Süper Hız & Çalışma Çarpanı ({_settlerSpeedMultiplier:0}x)"), _superSpeedSettlers))
             {
                 _superSpeedSettlers = !_superSpeedSettlers;
                 ApplySettlerSpeedMultiplier(_superSpeedSettlers ? _settlerSpeedMultiplier : 1f);
-                SetStatus("Köylü Süper Hız: " + (_superSpeedSettlers ? $"{_settlerSpeedMultiplier:0}x AÇIK" : "Normal (1x)"));
+                SetStatus(L("Settler Super Speed: ", "Köylü Süper Hız: ") + (_superSpeedSettlers ? $"{_settlerSpeedMultiplier:0}x {OnOff(true)}" : "Normal (1x)"));
             }
-            GUILayout.Label($"Çarpan: {_settlerSpeedMultiplier:0}x", _labelStyle, GUILayout.Width(80f));
+            GUILayout.Label(L($"Mult: {_settlerSpeedMultiplier:0}x", $"Çarpan: {_settlerSpeedMultiplier:0}x"), _labelStyle, GUILayout.Width(80f));
             float newMult = GUILayout.HorizontalSlider(_settlerSpeedMultiplier, 1f, 20f, GUILayout.Width(160f));
             if (Math.Abs(newMult - _settlerSpeedMultiplier) > 0.1f)
             {
@@ -832,27 +902,29 @@ namespace GoingMedievalTrainer
             GUILayout.EndVertical();
 
             GUILayout.BeginVertical(_sectionStyle);
-            GUILayout.Label("⚡ Tek Tıkla Toplu Köylü İşlemleri", _headerStyle);
+            GUILayout.Label(L("⚡ One-Click Bulk Settler Actions", "⚡ Tek Tıkla Toplu Köylü İşlemleri"), _headerStyle);
 
             GUILayout.BeginHorizontal();
-            if (TrainerButton("❤ Tümünü Şimdi İyileştir & Doyur"))
+            if (TrainerButton(L("❤ Heal & Fill All Needs Now", "❤ Tümünü Şimdi İyileştir & Doyur")))
             {
                 ApplyGodModeAndHealNow();
                 ApplyInfiniteNeedsNow();
-                SetStatus("Tüm köylüler iyileştirildi, yaraları sarıldı ve ihtiyaçları %100 yapıldı!");
+                SetStatus(L(
+                    "All settlers healed, wounds tended, and all needs set to 100%!",
+                    "Tüm köylüler iyileştirildi, yaraları sarıldı ve ihtiyaçları %100 yapıldı!"));
             }
-            if (TrainerButton("⭐ Tüm Yetenekleri Maksimum (50) Yap"))
+            if (TrainerButton(L("⭐ Max All Settler Skills (Level 50)", "⭐ Tüm Yetenekleri Maksimum (50) Yap")))
             {
                 MaxAllSettlerSkills();
             }
             GUILayout.EndHorizontal();
 
             GUILayout.BeginHorizontal();
-            if (TrainerButton("🔥 Tüm Yeteneklere Çift Yıldız (Tutku) Ver"))
+            if (TrainerButton(L("🔥 Give Double Passion (2 Stars) to All Skills", "🔥 Tüm Yeteneklere Çift Yıldız (Tutku) Ver")))
             {
                 MaxAllSettlerPassions();
             }
-            if (TrainerButton("➕ Köyüme +1 Yeni Köylü Ekle"))
+            if (TrainerButton(L("➕ Spawn +1 New Settler", "➕ Köyüme +1 Yeni Köylü Ekle")))
             {
                 SpawnNewSettlerNow();
             }
@@ -860,7 +932,7 @@ namespace GoingMedievalTrainer
             GUILayout.EndVertical();
 
             GUILayout.BeginVertical(_sectionStyle);
-            GUILayout.Label("👥 Köydeki Köylüler (Bireysel Müdahale)", _headerStyle);
+            GUILayout.Label(L("👥 Settlement Citizens (Individual Actions)", "👥 Köydeki Köylüler (Bireysel Müdahale)"), _headerStyle);
             _settlerScrollPos = GUILayout.BeginScrollView(_settlerScrollPos, GUILayout.Height(210f));
             try
             {
@@ -870,21 +942,24 @@ namespace GoingMedievalTrainer
                     foreach (var w in workers)
                     {
                         if (w == null || w.HasDisposed) continue;
-                        string name = w.Info != null ? w.Info.GetFullName() : ("Köylü #" + w.GetUniqueId());
+                        string name = w.Info != null ? w.Info.GetFullName() : (L("Settler #", "Köylü #") + w.GetUniqueId());
                         float hp = w.GetStat(StatType.Health)?.GetNormalizedPercentage() * 100f ?? 100f;
                         float mood = w.GetStat(StatType.Mood)?.GetNormalizedPercentage() * 100f ?? 100f;
 
                         GUILayout.BeginHorizontal();
-                        GUILayout.Label($"• {name}  |  Can: %{hp:0}  |  Moral: %{mood:0}", _labelStyle, GUILayout.Width(350f));
-                        if (TrainerButton($"İyileştir & Doyur ({name})", GUILayout.Width(155f)))
+                        GUILayout.Label(
+                            L($"• {name}  |  HP: {hp:0}%  |  Mood: {mood:0}%", $"• {name}  |  Can: %{hp:0}  |  Moral: %{mood:0}"),
+                            _labelStyle,
+                            GUILayout.Width(350f));
+                        if (TrainerButton(L($"Heal & Fill ({name})", $"İyileştir & Doyur ({name})"), GUILayout.Width(155f)))
                         {
                             HealAndFillSingleSettler(w);
-                            SetStatus($"{name} tamamen iyileştirildi ve doyuruldu.");
+                            SetStatus(L($"{name} fully healed and needs filled.", $"{name} tamamen iyileştirildi ve doyuruldu."));
                         }
                         if (TrainerButton($"Skill 50 ({name})", GUILayout.Width(135f)))
                         {
                             MaxSingleSettlerSkills(w);
-                            SetStatus($"{name} tüm yetenekleri 50 yapıldı!");
+                            SetStatus(L($"{name} all skills maxed to 50!", $"{name} tüm yetenekleri 50 yapıldı!"));
                         }
                         GUILayout.EndHorizontal();
                     }
@@ -928,77 +1003,77 @@ namespace GoingMedievalTrainer
             catch { }
 
             GUILayout.BeginVertical(_sectionStyle);
-            GUILayout.Label("🏗 İnşaat & Harita Hileleri [F5 ile Toplu Aç/Kapat]", _headerStyle);
+            GUILayout.Label(L("🏗 Building & Terrain Cheats [F5 Toggle All]", "🏗 İnşaat & Harita Hileleri [F5 ile Toplu Aç/Kapat]"), _headerStyle);
 
             GUILayout.BeginHorizontal();
-            if (DrawToggleButton("Anında Otomatik İnşaat (AutoConstruct)", autoConstruct))
+            if (DrawToggleButton(L("Instant Auto-Construct (AutoConstruct)", "Anında Otomatik İnşaat (AutoConstruct)"), autoConstruct))
             {
                 if (MonoSingleton<BuildingPlacementManager>.IsInstantiated())
                 {
                     MonoSingleton<BuildingPlacementManager>.Instance.AutoconstructToggle();
-                    SetStatus("Anında İnşaat: " + (MonoSingleton<BuildingPlacementManager>.Instance.Autoconstruct ? "AÇIK" : "KAPALI"));
+                    SetStatus(L("Instant Build: ", "Anında İnşaat: ") + OnOff(MonoSingleton<BuildingPlacementManager>.Instance.Autoconstruct));
                 }
             }
-            if (DrawToggleButton("Kaynaksız İnşaat (Malzeme İstemez)", noResourceBuild))
+            if (DrawToggleButton(L("Build Without Resources (Free Build)", "Kaynaksız İnşaat (Malzeme İstemez)"), noResourceBuild))
             {
                 if (MonoSingleton<BuildingPlacementManager>.IsInstantiated())
                 {
                     var bpm = MonoSingleton<BuildingPlacementManager>.Instance;
                     bpm.ConstructWithoutResource = !bpm.ConstructWithoutResource;
-                    SetStatus("Kaynaksız İnşaat: " + (bpm.ConstructWithoutResource ? "AÇIK" : "KAPALI"));
+                    SetStatus(L("Free Build (No Resources): ", "Kaynaksız İnşaat: ") + OnOff(bpm.ConstructWithoutResource));
                 }
             }
             GUILayout.EndHorizontal();
 
             GUILayout.BeginHorizontal();
-            if (DrawToggleButton("Tüm Bina Varyantlarını Aç", allVariants))
+            if (DrawToggleButton(L("Unlock All Building Variants", "Tüm Bina Varyantlarını Aç"), allVariants))
             {
                 if (MonoSingleton<BuildingPlacementManager>.IsInstantiated())
                 {
                     MonoSingleton<BuildingPlacementManager>.Instance.VariantsUnlockedToggle();
-                    SetStatus("Tüm Varyantlar: " + (MonoSingleton<BuildingPlacementManager>.Instance.VariantsUnlocked ? "AÇIK" : "KAPALI"));
+                    SetStatus(L("All Building Variants: ", "Tüm Varyantlar: ") + OnOff(MonoSingleton<BuildingPlacementManager>.Instance.VariantsUnlocked));
                 }
             }
-            if (DrawToggleButton("Üretilebilir Binaları Doğrudan İnşa Et", craftableBuildings))
+            if (DrawToggleButton(L("Place Craftable Buildings Directly", "Üretilebilir Binaları Doğrudan İnşa Et"), craftableBuildings))
             {
                 if (MonoSingleton<BuildingPlacementManager>.IsInstantiated())
                 {
                     MonoSingleton<BuildingPlacementManager>.Instance.CraftableBuildingsEnabledToggle();
-                    SetStatus("Üretilebilir Binalar: " + (MonoSingleton<BuildingPlacementManager>.Instance.CraftableBuildingsEnabled ? "AÇIK" : "KAPALI"));
+                    SetStatus(L("Craftable Buildings Direct Place: ", "Üretilebilir Binalar: ") + OnOff(MonoSingleton<BuildingPlacementManager>.Instance.CraftableBuildingsEnabled));
                 }
             }
             GUILayout.EndHorizontal();
 
             GUILayout.BeginHorizontal();
-            if (DrawToggleButton("Anında Kazı / Madencilik (Instant Dig)", instantDig))
+            if (DrawToggleButton(L("Instant Digging / Mining (Instant Dig)", "Anında Kazı / Madencilik (Instant Dig)"), instantDig))
             {
                 if (MonoSingleton<GroundManager>.IsInstantiated())
                 {
                     var gm = MonoSingleton<GroundManager>.Instance;
                     gm.InstantDig = !gm.InstantDig;
-                    SetStatus("Anında Kazı: " + (gm.InstantDig ? "AÇIK" : "KAPALI"));
+                    SetStatus(L("Instant Dig: ", "Anında Kazı: ") + OnOff(gm.InstantDig));
                 }
             }
-            if (DrawToggleButton("Anında Ağaç/Bitki Kesimi (Instant Cut)", instantCut))
+            if (DrawToggleButton(L("Instant Tree/Plant Cutting (Instant Cut)", "Anında Ağaç/Bitki Kesimi (Instant Cut)"), instantCut))
             {
                 if (MonoSingleton<PlantResourceManager>.IsInstantiated())
                 {
                     MonoSingleton<PlantResourceManager>.Instance.InstantCutToggle();
-                    SetStatus("Anında Kesim: " + (MonoSingleton<PlantResourceManager>.Instance.InstantCut ? "AÇIK" : "KAPALI"));
+                    SetStatus(L("Instant Cut: ", "Anında Kesim: ") + OnOff(MonoSingleton<PlantResourceManager>.Instance.InstantCut));
                 }
             }
             GUILayout.EndHorizontal();
 
             GUILayout.BeginHorizontal();
-            if (DrawToggleButton("Ekinleri Anında Hasat Aşamasına Getir", forceHarvest))
+            if (DrawToggleButton(L("Force Crops to Harvest Phase", "Ekinleri Anında Hasat Aşamasına Getir"), forceHarvest))
             {
                 if (MonoSingleton<PlantResourceManager>.IsInstantiated())
                 {
                     MonoSingleton<PlantResourceManager>.Instance.ForceHarvestPhaseToggle();
-                    SetStatus("Anında Hasat Evresi: " + (MonoSingleton<PlantResourceManager>.Instance.ForceHarvestPhase ? "AÇIK" : "KAPALI"));
+                    SetStatus(L("Force Harvest Phase: ", "Anında Hasat Evresi: ") + OnOff(MonoSingleton<PlantResourceManager>.Instance.ForceHarvestPhase));
                 }
             }
-            if (TrainerButton("⚡ Tüm Hızlı İnşa/Kazı Hilelerini Aç [F5]"))
+            if (TrainerButton(L("⚡ Toggle All Fast Build/Dig Cheats [F5]", "⚡ Tüm Hızlı İnşa/Kazı Hilelerini Aç [F5]")))
             {
                 ToggleAllFastBuildCheats();
             }
@@ -1006,24 +1081,24 @@ namespace GoingMedievalTrainer
             GUILayout.EndVertical();
 
             GUILayout.BeginVertical(_sectionStyle);
-            GUILayout.Label("🔬 Üretim Hızı, Mavi Planlar (Blueprints) & Araştırma", _headerStyle);
+            GUILayout.Label(L("🔬 Production Speed, Blueprints & Research", "🔬 Üretim Hızı, Mavi Planlar (Blueprints) & Araştırma"), _headerStyle);
 
             GUILayout.BeginHorizontal();
-            GUILayout.Label($"Global Tezgah Üretim Hızı: {_productionSpeedMultiplier:0}x", _labelStyle, GUILayout.Width(220f));
+            GUILayout.Label(L($"Global Workbench Speed: {_productionSpeedMultiplier:0}x", $"Global Tezgah Üretim Hızı: {_productionSpeedMultiplier:0}x"), _labelStyle, GUILayout.Width(220f));
             float newProd = GUILayout.HorizontalSlider(_productionSpeedMultiplier, 1f, 100f, GUILayout.Width(440f));
             if (Math.Abs(newProd - _productionSpeedMultiplier) > 0.2f)
             {
                 float rounded = Mathf.Round(newProd);
                 if (Math.Abs(rounded - _productionSpeedMultiplier) > 0.1f)
                 {
-                    _lastClickedAction = $"[İnşaat & Üretim] Üretim Hızı Slider ({rounded:0}x)";
+                    _lastClickedAction = $"[{CurrentTabName()}] Slider ({rounded:0}x)";
                     SetGlobalProductionSpeed(rounded);
                 }
             }
             GUILayout.EndHorizontal();
 
             GUILayout.BeginHorizontal();
-            GUILayout.Label("Hızlı Seçim:", _labelStyle, GUILayout.Width(85f));
+            GUILayout.Label(L("Quick Presets:", "Hızlı Seçim:"), _labelStyle, GUILayout.Width(95f));
             float[] prodPresets = new float[] { 1f, 2f, 5f, 10f, 15f, 20f, 30f, 50f, 100f };
             foreach (float preset in prodPresets)
             {
@@ -1032,7 +1107,7 @@ namespace GoingMedievalTrainer
                 GUIStyle st = isCurrent ? _activeButtonStyle : _buttonStyle;
                 if (GUILayout.Button(btnLabel, st, GUILayout.Height(28f)))
                 {
-                    _lastClickedAction = $"[İnşaat & Üretim] Tezgah Hızı Hızlı Seçim ({btnLabel})";
+                    _lastClickedAction = $"[{CurrentTabName()}] Preset ({btnLabel})";
                     SetGlobalProductionSpeed(preset);
                 }
             }
@@ -1040,11 +1115,11 @@ namespace GoingMedievalTrainer
 
             GUILayout.Space(6f);
             GUILayout.BeginHorizontal();
-            if (TrainerButton("🏛 Haritadaki Tüm İnşaat Planlarını Bitir [F6]", GUILayout.Height(36f)))
+            if (TrainerButton(L("🏛 Finish All Blueprints on Map [F6]", "🏛 Haritadaki Tüm İnşaat Planlarını Bitir [F6]"), GUILayout.Height(36f)))
             {
                 FinishAllBlueprintsNow();
             }
-            if (TrainerButton("📚 Tüm Araştırmaları (Teknolojileri) Aç", GUILayout.Height(36f)))
+            if (TrainerButton(L("📚 Unlock All Research (Technologies)", "📚 Tüm Araştırmaları (Teknolojileri) Aç"), GUILayout.Height(36f)))
             {
                 UnlockAllResearchNow();
             }
@@ -1055,16 +1130,16 @@ namespace GoingMedievalTrainer
         private void DrawResourcesTab()
         {
             GUILayout.BeginVertical(_sectionStyle);
-            GUILayout.Label("📦 Depo & Mevcut Yığın (Stockpile) Hileleri", _headerStyle);
+            GUILayout.Label(L("📦 Stockpile & Storage Cheats", "📦 Depo & Mevcut Yığın (Stockpile) Hileleri"), _headerStyle);
 
             GUILayout.BeginHorizontal();
-            if (DrawToggleButton("Çürüme Yok / Sürekli %100 Tazelik & Dayanıklılık", _noRotInfiniteFreshness))
+            if (DrawToggleButton(L("No Rot / Always 100% Freshness & HP", "Çürüme Yok / Sürekli %100 Tazelik & Dayanıklılık"), _noRotInfiniteFreshness))
             {
                 _noRotInfiniteFreshness = !_noRotInfiniteFreshness;
                 if (_noRotInfiniteFreshness) KeepAllResourcesFreshAndHealthy();
-                SetStatus("Çürüme Yok (Sonsuz Tazelik): " + (_noRotInfiniteFreshness ? "AÇIK" : "KAPALI"));
+                SetStatus(L("No Rot (Infinite Freshness): ", "Çürüme Yok (Sonsuz Tazelik): ") + OnOff(_noRotInfiniteFreshness));
             }
-            if (TrainerButton("💎 Mevcut Tüm Yığınları Maksimuma Doldur [F7]"))
+            if (TrainerButton(L("💎 Refill All Existing Stockpiles to Max [F7]", "💎 Mevcut Tüm Yığınları Maksimuma Doldur [F7]")))
             {
                 RefillAllStockpilesAndFreshness();
             }
@@ -1072,24 +1147,24 @@ namespace GoingMedievalTrainer
             GUILayout.EndVertical();
 
             GUILayout.BeginVertical(_sectionStyle);
-            GUILayout.Label("🎁 Kaynak & Eşya Oluşturucu (Köylünün Yanına Spawn Eder)", _headerStyle);
+            GUILayout.Label(L("🎁 Resource & Item Spawner (Spawns Next to Settler)", "🎁 Kaynak & Eşya Oluşturucu (Köylünün Yanına Spawn Eder)"), _headerStyle);
 
             GUILayout.BeginHorizontal();
-            GUILayout.Label("Miktar:", _labelStyle, GUILayout.Width(55f));
+            GUILayout.Label(L("Amount:", "Miktar:"), _labelStyle, GUILayout.Width(60f));
             foreach (int amt in new int[] { 25, 50, 100, 250, 500 })
             {
                 GUIStyle st = (_spawnAmount == amt) ? _activeButtonStyle : _buttonStyle;
                 if (GUILayout.Button(amt.ToString(), st, GUILayout.Width(55f)))
                 {
                     _spawnAmount = amt;
-                    _lastClickedAction = $"[Kaynak & Depo] Miktar Seçimi: {amt}";
-                    SetStatus($"Spawn miktarı {amt} olarak ayarlandı.");
+                    _lastClickedAction = $"[{CurrentTabName()}] Amount: {amt}";
+                    SetStatus(L($"Spawn amount set to {amt}.", $"Spawn miktarı {amt} olarak ayarlandı."));
                 }
             }
             GUILayout.Space(10f);
-            GUILayout.Label("Ara:", _labelStyle, GUILayout.Width(35f));
-            _resourceSearchQuery = GUILayout.TextField(_resourceSearchQuery ?? "", GUILayout.Width(180f));
-            if (GUILayout.Button("Temizle", _buttonStyle, GUILayout.Width(70f)))
+            GUILayout.Label(L("Search:", "Ara:"), _labelStyle, GUILayout.Width(50f));
+            _resourceSearchQuery = GUILayout.TextField(_resourceSearchQuery ?? "", GUILayout.Width(170f));
+            if (GUILayout.Button(L("Clear", "Temizle"), _buttonStyle, GUILayout.Width(70f)))
             {
                 _resourceSearchQuery = "";
             }
@@ -1097,19 +1172,19 @@ namespace GoingMedievalTrainer
 
             GUILayout.Space(4f);
             GUILayout.BeginHorizontal();
-            DrawQuickSpawnButton("Odun (wood)", "wood");
-            DrawQuickSpawnButton("Kireçtaşı (limestone)", "limestone");
-            DrawQuickSpawnButton("Kil (clay)", "clay");
-            DrawQuickSpawnButton("Demir Külçe (iron_ingot)", "iron_ingot");
-            DrawQuickSpawnButton("Çelik Külçe (steel_ingot)", "steel_ingot");
+            DrawQuickSpawnButton(L("Wood (wood)", "Odun (wood)"), "wood");
+            DrawQuickSpawnButton(L("Limestone", "Kireçtaşı (limestone)"), "limestone");
+            DrawQuickSpawnButton(L("Clay (clay)", "Kil (clay)"), "clay");
+            DrawQuickSpawnButton(L("Iron Ingot", "Demir Külçe (iron_ingot)"), "iron_ingot");
+            DrawQuickSpawnButton(L("Steel Ingot", "Çelik Külçe (steel_ingot)"), "steel_ingot");
             GUILayout.EndHorizontal();
 
             GUILayout.BeginHorizontal();
-            DrawQuickSpawnButton("Altın Külçe (gold_ingot)", "gold_ingot");
-            DrawQuickSpawnButton("Kömür (coal)", "coal");
-            DrawQuickSpawnButton("Kireçtaşı Blok", "limestone_block");
-            DrawQuickSpawnButton("Kil Tuğla", "clay_brick");
-            DrawQuickSpawnButton("Yemek (packaged_meal)", "packaged_meal");
+            DrawQuickSpawnButton(L("Gold Ingot", "Altın Külçe (gold_ingot)"), "gold_ingot");
+            DrawQuickSpawnButton(L("Coal (coal)", "Kömür (coal)"), "coal");
+            DrawQuickSpawnButton(L("Limestone Block", "Kireçtaşı Blok"), "limestone_block");
+            DrawQuickSpawnButton(L("Clay Brick", "Kil Tuğla"), "clay_brick");
+            DrawQuickSpawnButton(L("Packaged Meal", "Yemek (packaged_meal)"), "packaged_meal");
             GUILayout.EndHorizontal();
 
             GUILayout.Space(4f);
@@ -1130,10 +1205,10 @@ namespace GoingMedievalTrainer
                         continue;
 
                     GUILayout.BeginHorizontal();
-                    GUILayout.Label($"[{cat}] {id} (Max Yığın: {res.StackingLimit})", _labelStyle, GUILayout.Width(470f));
-                    if (GUILayout.Button($"+{_spawnAmount} Oluştur", _buttonStyle, GUILayout.Width(140f)))
+                    GUILayout.Label($"[{cat}] {id} ({L("Max Stack", "Max Yığın")}: {res.StackingLimit})", _labelStyle, GUILayout.Width(470f));
+                    if (GUILayout.Button(L($"+{_spawnAmount} Spawn", $"+{_spawnAmount} Oluştur"), _buttonStyle, GUILayout.Width(140f)))
                     {
-                        _lastClickedAction = $"[Kaynak & Depo] Listeden +{ _spawnAmount } Oluştur: {id}";
+                        _lastClickedAction = $"[{CurrentTabName()}] +{ _spawnAmount } {id}";
                         SpawnResourceById(id, _spawnAmount);
                     }
                     GUILayout.EndHorizontal();
@@ -1141,14 +1216,14 @@ namespace GoingMedievalTrainer
                     shown++;
                     if (shown >= 120)
                     {
-                        GUILayout.Label("... Daha fazla sonuç için yukarıdaki arama kutusunu kullanın ...", _labelStyle);
+                        GUILayout.Label(L("... Use the search box above for more results ...", "... Daha fazla sonuç için yukarıdaki arama kutusunu kullanın ..."), _labelStyle);
                         break;
                     }
                 }
             }
             else
             {
-                GUILayout.Label("Kaynak listesi harita yüklendiğinde otomatik dolacaktır.", _labelStyle);
+                GUILayout.Label(L("Resource list will populate automatically once a map is loaded.", "Kaynak listesi harita yüklendiğinde otomatik dolacaktır."), _labelStyle);
             }
             GUILayout.EndScrollView();
             GUILayout.EndVertical();
@@ -1158,54 +1233,55 @@ namespace GoingMedievalTrainer
         {
             if (GUILayout.Button(label, _buttonStyle))
             {
-                _lastClickedAction = $"[Kaynak & Depo] Hızlı Spawn Butonu: {label} (id={resourceId}, miktar={_spawnAmount})";
+                _lastClickedAction = $"[{CurrentTabName()}] Quick Spawn: {label} (id={resourceId}, qty={_spawnAmount})";
                 SpawnResourceById(resourceId, _spawnAmount);
             }
         }
 
+        // [0]=id, [1]=TR Başlık, [2]=TR Açıklama, [3]=EN Title, [4]=EN Description
         private static readonly string[][] AnimalCatalog = new string[][]
         {
-            new string[] { "cow",        "🐄 İnek (cow)",               "Süt / Et / Taşıma (Pet)" },
-            new string[] { "sheep",      "🐑 Koyun (sheep)",            "Yün / Süt / Et" },
-            new string[] { "goat",       "🐐 Keçi (goat)",              "Süt / Et / Taşıma (Pet)" },
-            new string[] { "donkey",     "🫏 Eşek (donkey)",            "Yük Taşıma (Pet)" },
-            new string[] { "chicken",    "🐔 Tavuk (chicken)",          "Yumurta / Et" },
-            new string[] { "boar",       "🐗 Yaban Domuzu (boar)",      "Et / Savaş & Taşıma (Pet)" },
-            new string[] { "dog",        "🐕 Köpek (dog)",              "Taşıma & Savaş (Pet)" },
-            new string[] { "cat",        "🐈 Kedi (cat)",               "Haşere Avcısı (Pet)" },
-            new string[] { "bear",       "🐻 Ayı (bear)",               "Güçlü Savaş & Taşıma (Pet)" },
-            new string[] { "wolf",       "🐺 Kurt (wolf)",              "Savaş & Taşıma (Pet)" },
-            new string[] { "fox",        "🦊 Tilki (fox)",              "Taşıma & Haşere (Pet)" },
-            new string[] { "deer",       "🦌 Geyik (deer)",             "Et / Deri / Taşıma (Pet)" },
-            new string[] { "hare",       "🐇 Tavşan (hare)",            "Küçük Av / Çiftlik" },
-            new string[] { "mallard",    "🦆 Yeşilbaş Ördek (mallard)", "Yumurta / Tüy" },
-            new string[] { "pheasant",   "🐦 Sülün (pheasant)",         "Yumurta / Tüy" },
-            new string[] { "polecat",    "🦡 Sansar (polecat)",         "Haşere Avcısı" },
-            new string[] { "rat",        "🐀 Sıçan (rat)",              "Küçük Hayvan" },
-            new string[] { "water_vole", "🐹 Su Sıçanı (water_vole)",   "Küçük Hayvan" }
+            new string[] { "cow",        "🐄 İnek (cow)",               "Süt / Et / Taşıma (Pet)",        "🐄 Cow (cow)",               "Milk / Meat / Hauling (Pet)" },
+            new string[] { "sheep",      "🐑 Koyun (sheep)",            "Yün / Süt / Et",                 "🐑 Sheep (sheep)",           "Wool / Milk / Meat" },
+            new string[] { "goat",       "🐐 Keçi (goat)",              "Süt / Et / Taşıma (Pet)",        "🐐 Goat (goat)",             "Milk / Meat / Hauling (Pet)" },
+            new string[] { "donkey",     "🫏 Eşek (donkey)",            "Yük Taşıma (Pet)",               "🫏 Donkey (donkey)",         "Heavy Hauling (Pet)" },
+            new string[] { "chicken",    "🐔 Tavuk (chicken)",          "Yumurta / Et",                   "🐔 Chicken (chicken)",       "Eggs / Meat" },
+            new string[] { "boar",       "🐗 Yaban Domuzu (boar)",      "Et / Savaş & Taşıma (Pet)",      "🐗 Wild Boar (boar)",        "Meat / Combat & Hauling (Pet)" },
+            new string[] { "dog",        "🐕 Köpek (dog)",              "Taşıma & Savaş (Pet)",           "🐕 Dog (dog)",               "Hauling & Combat (Pet)" },
+            new string[] { "cat",        "🐈 Kedi (cat)",               "Haşere Avcısı (Pet)",            "🐈 Cat (cat)",               "Pest Hunter (Pet)" },
+            new string[] { "bear",       "🐻 Ayı (bear)",               "Güçlü Savaş & Taşıma (Pet)",     "🐻 Bear (bear)",             "Heavy Combat & Hauling (Pet)" },
+            new string[] { "wolf",       "🐺 Kurt (wolf)",              "Savaş & Taşıma (Pet)",           "🐺 Wolf (wolf)",             "Combat & Hauling (Pet)" },
+            new string[] { "fox",        "🦊 Tilki (fox)",              "Taşıma & Haşere (Pet)",          "🦊 Fox (fox)",               "Hauling & Pest Control (Pet)" },
+            new string[] { "deer",       "🦌 Geyik (deer)",             "Et / Deri / Taşıma (Pet)",       "🦌 Deer (deer)",             "Meat / Leather / Hauling (Pet)" },
+            new string[] { "hare",       "🐇 Tavşan (hare)",            "Küçük Av / Çiftlik",             "🐇 Hare (hare)",             "Small Game / Livestock" },
+            new string[] { "mallard",    "🦆 Yeşilbaş Ördek (mallard)", "Yumurta / Tüy",                  "🦆 Mallard Duck (mallard)",  "Eggs / Feathers" },
+            new string[] { "pheasant",   "🐦 Sülün (pheasant)",         "Yumurta / Tüy",                  "🐦 Pheasant (pheasant)",     "Eggs / Feathers" },
+            new string[] { "polecat",    "🦡 Sansar (polecat)",         "Haşere Avcısı",                  "🦡 Polecat (polecat)",       "Pest Hunter" },
+            new string[] { "rat",        "🐀 Sıçan (rat)",              "Küçük Hayvan",                   "🐀 Rat (rat)",               "Small Creature" },
+            new string[] { "water_vole", "🐹 Su Sıçanı (water_vole)",   "Küçük Hayvan",                   "🐹 Water Vole (water_vole)", "Small Creature" }
         };
 
         private void DrawCombatAndCreaturesTab()
         {
             GUILayout.BeginVertical(_sectionStyle);
-            GUILayout.Label("⚔ Savaş, Tutsak & Mevcut Hayvan Kontrolleri", _headerStyle);
+            GUILayout.Label(L("⚔ Combat, Prisoners & Existing Animals", "⚔ Savaş, Tutsak & Mevcut Hayvan Kontrolleri"), _headerStyle);
             GUILayout.BeginHorizontal();
-            if (TrainerButton("💀 Tüm Düşmanları Öldür [F8]", GUILayout.Height(32f)))
+            if (TrainerButton(L("💀 Kill All Enemies [F8]", "💀 Tüm Düşmanları Öldür [F8]"), GUILayout.Height(32f)))
             {
                 KillAllEnemiesNow();
             }
-            if (TrainerButton("🤝 Tüm Tutsakları %100 İkna Et", GUILayout.Height(32f)))
+            if (TrainerButton(L("🤝 Recruit All Prisoners (100%)", "🤝 Tüm Tutsakları %100 İkna Et"), GUILayout.Height(32f)))
             {
                 RecruitAllPrisonersNow();
             }
             GUILayout.EndHorizontal();
 
             GUILayout.BeginHorizontal();
-            if (TrainerButton("🥛 Hayvan Üretimlerini Tamamla (Süt/Yün/Yumurta)", GUILayout.Height(32f)))
+            if (TrainerButton(L("🥛 Complete Animal Production (Milk/Wool/Egg)", "🥛 Hayvan Üretimlerini Tamamla (Süt/Yün/Yumurta)"), GUILayout.Height(32f)))
             {
                 CompleteAllAnimalProductionNow();
             }
-            if (TrainerButton("🐕 Haritadaki Tüm Hayvanları Evcilleştir & Eğit", GUILayout.Height(32f)))
+            if (TrainerButton(L("🐕 Tame & Train All Animals on Map", "🐕 Haritadaki Tüm Hayvanları Evcilleştir & Eğit"), GUILayout.Height(32f)))
             {
                 TameAndTrainAllAnimalsNow();
             }
@@ -1213,33 +1289,33 @@ namespace GoingMedievalTrainer
             GUILayout.EndVertical();
 
             GUILayout.BeginVertical(_sectionStyle);
-            GUILayout.Label("🐾 Hayvan Oluşturucu (Yabani / Ehli / Evcil Seçimli - Köylünün Yanına)", _headerStyle);
+            GUILayout.Label(L("🐾 Animal Spawner (Wild / Domestic / Pet - Next to Settler)", "🐾 Hayvan Oluşturucu (Yabani / Ehli / Evcil Seçimli - Köylünün Yanına)"), _headerStyle);
 
             // 1. Satır: Tür Seçimi (Yabani / Ehli / Evcil)
             GUILayout.BeginHorizontal();
-            GUILayout.Label("Durum:", _labelStyle, GUILayout.Width(55f));
-            string[] modeNames = new string[]
-            {
-                "🐺 Yabani (Wild)",
-                "🐄 Ehli / Çiftlik (Domestic)",
-                "🐕 Evcil / Eğitimli (Pet)"
-            };
+            GUILayout.Label(L("Mode:", "Durum:"), _labelStyle, GUILayout.Width(55f));
+            string[] modeNames = _isTurkish
+                ? new string[] { "🐺 Yabani (Wild)", "🐄 Ehli / Çiftlik (Domestic)", "🐕 Evcil / Eğitimli (Pet)" }
+                : new string[] { "🐺 Wild", "🐄 Domestic (Livestock)", "🐕 Trained Pet (Haul/Follow)" };
+
             for (int m = 0; m < modeNames.Length; m++)
             {
                 GUIStyle st = (_animalSpawnMode == m) ? _activeButtonStyle : _buttonStyle;
                 if (GUILayout.Button(modeNames[m], st, GUILayout.Height(28f)))
                 {
                     _animalSpawnMode = m;
-                    _lastClickedAction = $"[Savaş & Canlılar] Hayvan Spawn Modu: {modeNames[m]}";
-                    SetStatus($"Hayvan spawn durumu [{modeNames[m]}] olarak seçildi.");
+                    _lastClickedAction = $"[{CurrentTabName()}] Animal Mode: {modeNames[m]}";
+                    SetStatus(L($"Animal spawn mode set to [{modeNames[m]}].", $"Hayvan spawn durumu [{modeNames[m]}] olarak seçildi."));
                 }
             }
             GUILayout.EndHorizontal();
 
             // 2. Satır: Cinsiyet, Yaş ve Adet Seçimi
             GUILayout.BeginHorizontal();
-            GUILayout.Label("Cinsiyet:", _labelStyle, GUILayout.Width(60f));
-            string[] sexNames = new string[] { "🎲 Rastgele", "♂ Erkek", "♀ Dişi" };
+            GUILayout.Label(L("Sex:", "Cinsiyet:"), _labelStyle, GUILayout.Width(60f));
+            string[] sexNames = _isTurkish
+                ? new string[] { "🎲 Rastgele", "♂ Erkek", "♀ Dişi" }
+                : new string[] { "🎲 Random", "♂ Male", "♀ Female" };
             for (int s = 0; s < sexNames.Length; s++)
             {
                 GUIStyle st = (_animalSpawnSex == s) ? _activeButtonStyle : _buttonStyle;
@@ -1250,14 +1326,14 @@ namespace GoingMedievalTrainer
             }
 
             GUILayout.Space(8f);
-            GUILayout.Label("Evre:", _labelStyle, GUILayout.Width(40f));
-            if (GUILayout.Button(_animalSpawnMature ? "Yetişkin" : "Yavru", _activeButtonStyle, GUILayout.Width(75f), GUILayout.Height(26f)))
+            GUILayout.Label(L("Age:", "Evre:"), _labelStyle, GUILayout.Width(40f));
+            if (GUILayout.Button(_animalSpawnMature ? L("Adult", "Yetişkin") : L("Young", "Yavru"), _activeButtonStyle, GUILayout.Width(75f), GUILayout.Height(26f)))
             {
                 _animalSpawnMature = !_animalSpawnMature;
             }
 
             GUILayout.Space(8f);
-            GUILayout.Label("Adet:", _labelStyle, GUILayout.Width(38f));
+            GUILayout.Label(L("Qty:", "Adet:"), _labelStyle, GUILayout.Width(38f));
             foreach (int cnt in new int[] { 1, 2, 5, 10 })
             {
                 GUIStyle st = (_animalSpawnCount == cnt) ? _activeButtonStyle : _buttonStyle;
@@ -1269,19 +1345,24 @@ namespace GoingMedievalTrainer
             GUILayout.EndHorizontal();
 
             GUILayout.Space(4f);
-            string activeModeShort = _animalSpawnMode == 0 ? "Yabani" : (_animalSpawnMode == 1 ? "Ehli" : "Evcil Pet");
+            string activeModeShort = _animalSpawnMode == 0
+                ? L("Wild", "Yabani")
+                : (_animalSpawnMode == 1 ? L("Domestic", "Ehli") : L("Pet", "Evcil Pet"));
             _animalScrollPos = GUILayout.BeginScrollView(_animalScrollPos, GUILayout.Height(260f));
             for (int i = 0; i < AnimalCatalog.Length; i++)
             {
                 string aId = AnimalCatalog[i][0];
-                string aTitle = AnimalCatalog[i][1];
-                string aDesc = AnimalCatalog[i][2];
+                string aTitle = _isTurkish ? AnimalCatalog[i][1] : AnimalCatalog[i][3];
+                string aDesc = _isTurkish ? AnimalCatalog[i][2] : AnimalCatalog[i][4];
 
                 GUILayout.BeginHorizontal();
                 GUILayout.Label($"{aTitle}  —  {aDesc}", _labelStyle, GUILayout.Width(455f));
-                if (GUILayout.Button($"+{_animalSpawnCount} {activeModeShort} Oluştur", _buttonStyle, GUILayout.Width(210f), GUILayout.Height(26f)))
+                string btnText = _isTurkish
+                    ? $"+{_animalSpawnCount} {activeModeShort} Oluştur"
+                    : $"Spawn +{_animalSpawnCount} {activeModeShort}";
+                if (GUILayout.Button(btnText, _buttonStyle, GUILayout.Width(210f), GUILayout.Height(26f)))
                 {
-                    _lastClickedAction = $"[Savaş & Canlılar] Hayvan Spawn: {aTitle} (Mod={activeModeShort}, Cinsiyet={sexNames[_animalSpawnSex]}, Yetişkin={_animalSpawnMature}, Adet={_animalSpawnCount})";
+                    _lastClickedAction = $"[{CurrentTabName()}] Spawn Animal: {aTitle} (Mode={activeModeShort}, Sex={sexNames[_animalSpawnSex]}, Adult={_animalSpawnMature}, Qty={_animalSpawnCount})";
                     SpawnCustomAnimalsNow(aId, aTitle);
                 }
                 GUILayout.EndHorizontal();
@@ -1293,45 +1374,45 @@ namespace GoingMedievalTrainer
         private void DrawTimeAndWeatherTab()
         {
             GUILayout.BeginVertical(_sectionStyle);
-            GUILayout.Label("⏩ Oyun Hızı (TimeScale)", _headerStyle);
+            GUILayout.Label(L("⏩ Game Speed (TimeScale)", "⏩ Oyun Hızı (TimeScale)"), _headerStyle);
             GUILayout.BeginHorizontal();
-            if (TrainerButton("Duraklat (0x)")) SetGameSpeed(0f);
+            if (TrainerButton(L("Pause (0x)", "Duraklat (0x)"))) SetGameSpeed(0f);
             if (TrainerButton("Normal (1x)")) SetGameSpeed(1f);
-            if (TrainerButton("Hızlı (3x)")) SetGameSpeed(3f);
-            if (TrainerButton("Çok Hızlı (5x)")) SetGameSpeed(5f);
+            if (TrainerButton(L("Fast (3x)", "Hızlı (3x)"))) SetGameSpeed(3f);
+            if (TrainerButton(L("Very Fast (5x)", "Çok Hızlı (5x)"))) SetGameSpeed(5f);
             if (TrainerButton("Ultra (10x)")) SetGameSpeed(10f);
             if (TrainerButton("Turbo (20x)")) SetGameSpeed(20f);
             GUILayout.EndHorizontal();
             GUILayout.EndVertical();
 
             GUILayout.BeginVertical(_sectionStyle);
-            GUILayout.Label("☀ Günün Saati", _headerStyle);
+            GUILayout.Label(L("☀ Time of Day", "☀ Günün Saati"), _headerStyle);
             GUILayout.BeginHorizontal();
-            if (TrainerButton("🌅 Sabah (06:00)")) SetTimeOfDay(0.25f);
-            if (TrainerButton("☀ Öğle (12:00)")) SetTimeOfDay(0.50f);
-            if (TrainerButton("🌇 Akşam (18:00)")) SetTimeOfDay(0.75f);
-            if (TrainerButton("🌙 Gece Yarısı (00:00)")) SetTimeOfDay(0.02f);
+            if (TrainerButton(L("🌅 Morning (06:00)", "🌅 Sabah (06:00)"))) SetTimeOfDay(0.25f);
+            if (TrainerButton(L("☀ Noon (12:00)", "☀ Öğle (12:00)"))) SetTimeOfDay(0.50f);
+            if (TrainerButton(L("🌇 Evening (18:00)", "🌇 Akşam (18:00)"))) SetTimeOfDay(0.75f);
+            if (TrainerButton(L("🌙 Midnight (00:00)", "🌙 Gece Yarısı (00:00)"))) SetTimeOfDay(0.02f);
             GUILayout.EndHorizontal();
             GUILayout.EndVertical();
 
             GUILayout.BeginVertical(_sectionStyle);
-            GUILayout.Label("🍂 Mevsim Değiştir", _headerStyle);
+            GUILayout.Label(L("🍂 Change Season", "🍂 Mevsim Değiştir"), _headerStyle);
             GUILayout.BeginHorizontal();
-            if (TrainerButton("🌸 İlkbahar (Spring)")) SetSeason(0);
-            if (TrainerButton("☀ Yaz (Summer)")) SetSeason(1);
-            if (TrainerButton("🍁 Sonbahar (Autumn)")) SetSeason(2);
-            if (TrainerButton("❄ Kış (Winter)")) SetSeason(3);
+            if (TrainerButton(L("🌸 Spring", "🌸 İlkbahar (Spring)"))) SetSeason(0);
+            if (TrainerButton(L("☀ Summer", "☀ Yaz (Summer)"))) SetSeason(1);
+            if (TrainerButton(L("🍁 Autumn", "🍁 Sonbahar (Autumn)"))) SetSeason(2);
+            if (TrainerButton(L("❄ Winter", "❄ Kış (Winter)"))) SetSeason(3);
             GUILayout.EndHorizontal();
             GUILayout.EndVertical();
 
             GUILayout.BeginVertical(_sectionStyle);
-            GUILayout.Label("🌧 Hava Durumu", _headerStyle);
+            GUILayout.Label(L("🌧 Weather Control", "🌧 Hava Durumu"), _headerStyle);
             GUILayout.BeginHorizontal();
-            if (TrainerButton("☀ Açık (Clear)")) SetWeather("clear");
-            if (TrainerButton("🌧 Yağmur (Rain)")) SetWeather("rain");
-            if (TrainerButton("🌫 Sis (Fog)")) SetWeather("fog");
-            if (TrainerButton("❄ Kar (Snow)")) SetWeather("snow");
-            if (TrainerButton("⛈ Fırtına (Thunderstorm)")) SetWeather("thunderstorm");
+            if (TrainerButton(L("☀ Clear / Sunny", "☀ Açık (Clear)"))) SetWeather("clear");
+            if (TrainerButton(L("🌧 Rain", "🌧 Yağmur (Rain)"))) SetWeather("rain");
+            if (TrainerButton(L("🌫 Fog", "🌫 Sis (Fog)"))) SetWeather("fog");
+            if (TrainerButton(L("❄ Snow", "❄ Kar (Snow)"))) SetWeather("snow");
+            if (TrainerButton(L("⛈ Thunderstorm", "⛈ Fırtına (Thunderstorm)"))) SetWeather("thunderstorm");
             GUILayout.EndHorizontal();
             GUILayout.EndVertical();
         }
@@ -1339,40 +1420,44 @@ namespace GoingMedievalTrainer
         private void DrawDevConsoleTab()
         {
             GUILayout.BeginVertical(_sectionStyle);
-            GUILayout.Label("🛠 Oyunun Kendi Gizli Geliştirici Paneli (DeveloperToolsView)", _headerStyle);
-            GUILayout.Label("Going Medieval'ın geliştiricilerinin kullandığı orijinal hile ve test panelini doğrudan açar.", _labelStyle);
-            if (TrainerButton("🔧 Orijinal Geliştirici Panelini Aç / Kapat [F2]", GUILayout.Height(36f)))
+            GUILayout.Label(L("🛠 Native Hidden Developer Panel (DeveloperToolsView)", "🛠 Oyunun Kendi Gizli Geliştirici Paneli (DeveloperToolsView)"), _headerStyle);
+            GUILayout.Label(
+                L(
+                    "Directly opens the built-in developer cheat & testing panel created by Going Medieval's developers.",
+                    "Going Medieval'ın geliştiricilerinin kullandığı orijinal hile ve test panelini doğrudan açar."),
+                _labelStyle);
+            if (TrainerButton(L("🔧 Toggle Native Developer Panel [F2]", "🔧 Orijinal Geliştirici Panelini Aç / Kapat [F2]"), GUILayout.Height(36f)))
             {
                 ToggleNativeDevTools();
             }
             GUILayout.EndVertical();
 
             GUILayout.BeginVertical(_sectionStyle);
-            GUILayout.Label("💻 Geliştirici Konsolu Komut Çalıştırıcı", _headerStyle);
+            GUILayout.Label(L("💻 Developer Console Command Runner", "💻 Geliştirici Konsolu Komut Çalıştırıcı"), _headerStyle);
             GUILayout.BeginHorizontal();
             _customConsoleCommand = GUILayout.TextField(_customConsoleCommand ?? "", GUILayout.Width(460f));
-            if (TrainerButton("Komutu Çalıştır"))
+            if (TrainerButton(L("Run Command", "Komutu Çalıştır")))
             {
                 ExecuteConsoleCommand(_customConsoleCommand);
             }
             GUILayout.EndHorizontal();
 
             GUILayout.Space(6f);
-            GUILayout.Label("Hazır Konsol Komutları:", _labelStyle);
+            GUILayout.Label(L("Quick Console Commands:", "Hazır Konsol Komutları:"), _labelStyle);
             GUILayout.BeginHorizontal();
-            if (TrainerButton("Harita Sınırına İnşaat İzni")) ExecuteConsoleCommand("toggleAllowEdgePlacement");
-            if (TrainerButton("Kilitli Binaları Aç")) ExecuteConsoleCommand("unlockLockedBuildings");
-            if (TrainerButton("Kaynaksız Otomatik Üretim")) ExecuteConsoleCommand("autoprodResources");
+            if (TrainerButton(L("Allow Map Edge Building", "Harita Sınırına İnşaat İzni"))) ExecuteConsoleCommand("toggleAllowEdgePlacement");
+            if (TrainerButton(L("Unlock Locked Buildings", "Kilitli Binaları Aç"))) ExecuteConsoleCommand("unlockLockedBuildings");
+            if (TrainerButton(L("Auto-Craft Without Resources", "Kaynaksız Otomatik Üretim"))) ExecuteConsoleCommand("autoprodResources");
             GUILayout.EndHorizontal();
 
             GUILayout.BeginHorizontal();
-            if (TrainerButton("İşçisiz Otomatik Üretim")) ExecuteConsoleCommand("autoprodWorkers");
-            if (TrainerButton("Savaş Hasar Sayılarını Göster"))
+            if (TrainerButton(L("Auto-Craft Without Workers", "İşçisiz Otomatik Üretim"))) ExecuteConsoleCommand("autoprodWorkers");
+            if (TrainerButton(L("Toggle Combat Damage Numbers", "Savaş Hasar Sayılarını Göster")))
             {
                 DeveloperVariables.ShowCombatNumbers = !DeveloperVariables.ShowCombatNumbers;
-                SetStatus("Savaş Hasar Sayıları: " + (DeveloperVariables.ShowCombatNumbers ? "AÇIK" : "KAPALI"));
+                SetStatus(L("Combat Damage Numbers: ", "Savaş Hasar Sayıları: ") + OnOff(DeveloperVariables.ShowCombatNumbers));
             }
-            if (TrainerButton("Su Editörünü Aç (waterEdiort)")) ExecuteConsoleCommand("waterEdiort");
+            if (TrainerButton(L("Open Water Editor (waterEdiort)", "Su Editörünü Aç (waterEdiort)"))) ExecuteConsoleCommand("waterEdiort");
             GUILayout.EndHorizontal();
             GUILayout.EndVertical();
         }
@@ -1380,16 +1465,18 @@ namespace GoingMedievalTrainer
         private void DrawLogsTab()
         {
             GUILayout.BeginVertical(_sectionStyle);
-            GUILayout.Label("📋 Tıklanan Buton & Oluşan Durum Logları", _headerStyle);
-            GUILayout.Label($"Dosya Yolu: {_logFilePath}", _labelStyle);
+            GUILayout.Label(L("📋 Clicked Action & Status Logs", "📋 Tıklanan Buton & Oluşan Durum Logları"), _headerStyle);
+            GUILayout.Label(L($"File Path: {_logFilePath}", $"Dosya Yolu: {_logFilePath}"), _labelStyle);
 
             GUILayout.BeginHorizontal();
-            if (GUILayout.Button("📋 Tüm Logları Panoya Kopyala", _buttonStyle, GUILayout.Height(32f)))
+            if (GUILayout.Button(L("📋 Copy All Logs to Clipboard", "📋 Tüm Logları Panoya Kopyala"), _buttonStyle, GUILayout.Height(32f)))
             {
                 GUIUtility.systemCopyBuffer = string.Join(Environment.NewLine, _actionStatusLogs);
-                _statusMessage = $"Tüm loglar ({_actionStatusLogs.Count} satır) panoya kopyalandı! (Ctrl+V ile yapıştırabilirsiniz)";
+                _statusMessage = L(
+                    $"All logs ({_actionStatusLogs.Count} lines) copied to clipboard! (Paste with Ctrl+V)",
+                    $"Tüm loglar ({_actionStatusLogs.Count} satır) panoya kopyalandı! (Ctrl+V ile yapıştırabilirsiniz)");
             }
-            if (GUILayout.Button("📂 Log Dosyasını Notepad İle Aç", _buttonStyle, GUILayout.Height(32f)))
+            if (GUILayout.Button(L("📂 Open Log File in Notepad", "📂 Log Dosyasını Notepad İle Aç"), _buttonStyle, GUILayout.Height(32f)))
             {
                 try
                 {
@@ -1400,7 +1487,7 @@ namespace GoingMedievalTrainer
                 }
                 catch { }
             }
-            if (GUILayout.Button("🗑 Ekran Listesini Temizle", _buttonStyle, GUILayout.Height(32f)))
+            if (GUILayout.Button(L("🗑 Clear Screen List", "🗑 Ekran Listesini Temizle"), _buttonStyle, GUILayout.Height(32f)))
             {
                 _actionStatusLogs.Clear();
             }
@@ -1410,7 +1497,11 @@ namespace GoingMedievalTrainer
             _logScrollPos = GUILayout.BeginScrollView(_logScrollPos, GUILayout.Height(390f));
             if (_actionStatusLogs.Count == 0)
             {
-                GUILayout.Label("Henüz bir işlem kaydı yok. Herhangi bir butona tıkladığınızda burada ve log dosyasında görünecektir.", _labelStyle);
+                GUILayout.Label(
+                    L(
+                        "No action logs yet. Click any cheat button and its result will appear here and in the log file.",
+                        "Henüz bir işlem kaydı yok. Herhangi bir butona tıkladığınızda burada ve log dosyasında görünecektir."),
+                    _labelStyle);
             }
             else
             {
@@ -1631,11 +1722,13 @@ namespace GoingMedievalTrainer
                     MaxSingleSettlerSkills(worker);
                     count++;
                 }
-                SetStatus($"{count} köylünün tüm yetenekleri (Skills) maksimum seviyeye (50) çıkarıldı!");
+                SetStatus(L(
+                    $"All skills maxed to level 50 for {count} settlers!",
+                    $"{count} köylünün tüm yetenekleri (Skills) maksimum seviyeye (50) çıkarıldı!"));
             }
             catch (Exception ex)
             {
-                SetStatus("Yetenek artırma hatası: " + ex.Message, ex);
+                SetStatus(L("Skill maxing error: ", "Yetenek artırma hatası: ") + ex.Message, ex);
             }
         }
 
@@ -1669,11 +1762,13 @@ namespace GoingMedievalTrainer
                     }
                     count++;
                 }
-                SetStatus($"{count} köylünün tüm yeteneklerine Çift Yıldız (Tutku) verildi!");
+                SetStatus(L(
+                    $"Double Passion (2 Stars) granted to all skills for {count} settlers!",
+                    $"{count} köylünün tüm yeteneklerine Çift Yıldız (Tutku) verildi!"));
             }
             catch (Exception ex)
             {
-                SetStatus("Tutku verme hatası: " + ex.Message, ex);
+                SetStatus(L("Passion error: ", "Tutku verme hatası: ") + ex.Message, ex);
             }
         }
 
@@ -1683,7 +1778,7 @@ namespace GoingMedievalTrainer
             {
                 if (!IsInActiveGameplay() || !MonoSingleton<WorkerGenerator>.IsInstantiated() || !MonoSingleton<WorkerController>.IsInstantiated())
                 {
-                    SetStatus("Aktif köy bulunamadı!");
+                    SetStatus(L("No active settlement found!", "Aktif köy bulunamadı!"));
                     return;
                 }
 
@@ -1699,13 +1794,13 @@ namespace GoingMedievalTrainer
                 {
                     newHumanoid.UpdatePosition(spawnPos);
                     MonoSingleton<WorkerController>.Instance.CreateWorker(newHumanoid);
-                    string name = newHumanoid.Info != null ? newHumanoid.Info.GetFullName() : "Yeni Köylü";
-                    SetStatus($"Yeni köylü ({name}) köyünüze katıldı!");
+                    string name = newHumanoid.Info != null ? newHumanoid.Info.GetFullName() : L("New Settler", "Yeni Köylü");
+                    SetStatus(L($"New settler ({name}) joined your settlement!", $"Yeni köylü ({name}) köyünüze katıldı!"));
                 }
             }
             catch (Exception ex)
             {
-                SetStatus("Köylü oluşturma hatası: " + ex.Message, ex);
+                SetStatus(L("Settler spawn error: ", "Köylü oluşturma hatası: ") + ex.Message, ex);
             }
         }
 
@@ -1731,11 +1826,11 @@ namespace GoingMedievalTrainer
                     MonoSingleton<PlantResourceManager>.Instance.InstantCut = targetState;
                     MonoSingleton<PlantResourceManager>.Instance.ForceHarvestPhase = targetState;
                 }
-                SetStatus("Hızlı İnşaat + Kaynaksız İnşa + Anında Kazı/Kesim: " + (targetState ? "AÇIK" : "KAPALI"));
+                SetStatus(L("Instant Build + Free Build + Instant Dig/Cut: ", "Hızlı İnşaat + Kaynaksız İnşa + Anında Kazı/Kesim: ") + OnOff(targetState));
             }
             catch (Exception ex)
             {
-                SetStatus("Hızlı inşaat hatası: " + ex.Message, ex);
+                SetStatus(L("Fast build error: ", "Hızlı inşaat hatası: ") + ex.Message, ex);
             }
         }
 
@@ -1746,13 +1841,13 @@ namespace GoingMedievalTrainer
                 if (MonoSingleton<DeveloperConsoleController>.IsInstantiated())
                 {
                     MonoSingleton<DeveloperConsoleController>.Instance.ParseCommand("finishAllBluerpints");
-                    SetStatus("Haritadaki tüm inşaat planları (Blueprints) tamamlanıyor!");
+                    SetStatus(L("Completing all construction blueprints on the map!", "Haritadaki tüm inşaat planları (Blueprints) tamamlanıyor!"));
                     return;
                 }
             }
             catch (Exception ex)
             {
-                SetStatus("Plan tamamlama hatası: " + ex.Message, ex);
+                SetStatus(L("Blueprint finish error: ", "Plan tamamlama hatası: ") + ex.Message, ex);
             }
         }
 
@@ -1763,12 +1858,12 @@ namespace GoingMedievalTrainer
                 if (MonoSingleton<ResearchController>.IsInstantiated())
                 {
                     MonoSingleton<ResearchController>.Instance.ActivateAllResearch();
-                    SetStatus("Tüm araştırmalar ve teknolojiler açıldı!");
+                    SetStatus(L("All research & technologies unlocked!", "Tüm araştırmalar ve teknolojiler açıldı!"));
                 }
             }
             catch (Exception ex)
             {
-                SetStatus("Araştırma açma hatası: " + ex.Message, ex);
+                SetStatus(L("Research unlock error: ", "Araştırma açma hatası: ") + ex.Message, ex);
             }
         }
 
@@ -1805,7 +1900,7 @@ namespace GoingMedievalTrainer
             {
                 if (!MonoSingleton<ResourcePileManager>.IsInstantiated())
                 {
-                    SetStatus("Harita yüklü değil!");
+                    SetStatus(L("Map not loaded!", "Harita yüklü değil!"));
                     return;
                 }
 
@@ -1847,11 +1942,13 @@ namespace GoingMedievalTrainer
                     MonoSingleton<ResourcePileTracker>.Instance.ScheduleRecountPiles();
                 }
 
-                SetStatus($"{count} kaynak yığını maksimum limite dolduruldu ve tüm erzakların tazeliği %100 yapıldı!");
+                SetStatus(L(
+                    $"{count} stockpiles refilled to max stack and all resources restored to 100% freshness!",
+                    $"{count} kaynak yığını maksimum limite dolduruldu ve tüm erzakların tazeliği %100 yapıldı!"));
             }
             catch (Exception ex)
             {
-                SetStatus("Depo doldurma hatası: " + ex.Message, ex);
+                SetStatus(L("Stockpile refill error: ", "Depo doldurma hatası: ") + ex.Message, ex);
             }
         }
 
@@ -1878,21 +1975,21 @@ namespace GoingMedievalTrainer
             {
                 if (!IsInActiveGameplay() || !Repository<ResourceRepository, Resource>.IsInstantiated() || !MonoSingleton<ResourcePileManager>.IsInstantiated())
                 {
-                    SetStatus("Aktif harita veya ResourcePileManager bulunamadı!");
+                    SetStatus(L("Active map or ResourcePileManager not found!", "Aktif harita veya ResourcePileManager bulunamadı!"));
                     return;
                 }
 
                 var blueprint = Repository<ResourceRepository, Resource>.Instance.GetByID(resourceId);
                 if (blueprint == null)
                 {
-                    SetStatus($"Kaynak bulunamadı: {resourceId}");
+                    SetStatus(L($"Resource not found: {resourceId}", $"Kaynak bulunamadı: {resourceId}"));
                     return;
                 }
 
                 var worker = WorkerManager.LabourersHere.FirstOrDefault(w => w != null && !w.HasDisposed);
                 if (worker == null)
                 {
-                    SetStatus("Haritada aktif köylü bulunamadı!");
+                    SetStatus(L("No active settler found on the map!", "Haritada aktif köylü bulunamadı!"));
                     return;
                 }
 
@@ -1915,12 +2012,14 @@ namespace GoingMedievalTrainer
                     MonoSingleton<ResourcePileTracker>.Instance.ScheduleRecountPiles();
                 }
 
-                string workerName = worker.Info != null ? worker.Info.GetFullName() : "köylü";
-                SetStatus($"+{amount} adet [{resourceId}] ({workerName} yanına) başarıyla oluşturuldu!");
+                string workerName = worker.Info != null ? worker.Info.GetFullName() : L("settler", "köylü");
+                SetStatus(L(
+                    $"+{amount} [{resourceId}] spawned next to {workerName}!",
+                    $"+{amount} adet [{resourceId}] ({workerName} yanına) başarıyla oluşturuldu!"));
             }
             catch (Exception ex)
             {
-                SetStatus($"Kaynak oluşturma hatası ({resourceId}): {ex.Message}", ex);
+                SetStatus(L($"Resource spawn error ({resourceId}): {ex.Message}", $"Kaynak oluşturma hatası ({resourceId}): {ex.Message}"), ex);
             }
         }
 
@@ -1931,12 +2030,12 @@ namespace GoingMedievalTrainer
                 if (MonoSingleton<DeveloperConsoleController>.IsInstantiated())
                 {
                     MonoSingleton<DeveloperConsoleController>.Instance.ParseCommand("killEnemies");
-                    SetStatus("Haritadaki tüm düşmanlar öldürüldü!");
+                    SetStatus(L("All enemies on the map have been eliminated!", "Haritadaki tüm düşmanlar öldürüldü!"));
                 }
             }
             catch (Exception ex)
             {
-                SetStatus("Düşman öldürme hatası: " + ex.Message, ex);
+                SetStatus(L("Kill enemies error: ", "Düşman öldürme hatası: ") + ex.Message, ex);
             }
         }
 
@@ -1960,11 +2059,13 @@ namespace GoingMedievalTrainer
                         }
                     }
                 }
-                SetStatus($"{count} tutsak %100 ikna edildi (köye katılmaya hazır)!");
+                SetStatus(L(
+                    $"{count} prisoners 100% convinced (ready to join settlement)!",
+                    $"{count} tutsak %100 ikna edildi (köye katılmaya hazır)!"));
             }
             catch (Exception ex)
             {
-                SetStatus("Tutsak ikna hatası: " + ex.Message, ex);
+                SetStatus(L("Prisoner recruit error: ", "Tutsak ikna hatası: ") + ex.Message, ex);
             }
         }
 
@@ -1981,11 +2082,13 @@ namespace GoingMedievalTrainer
                     animal.CompleteAnimalProduction();
                     count++;
                 }
-                SetStatus($"{count} hayvanın üretimi (süt/yün/yumurta) tamamlandı!");
+                SetStatus(L(
+                    $"Production (milk/wool/eggs) completed for {count} animals!",
+                    $"{count} hayvanın üretimi (süt/yün/yumurta) tamamlandı!"));
             }
             catch (Exception ex)
             {
-                SetStatus("Hayvan üretim hatası: " + ex.Message, ex);
+                SetStatus(L("Animal production error: ", "Hayvan üretim hatası: ") + ex.Message, ex);
             }
         }
 
@@ -2017,11 +2120,13 @@ namespace GoingMedievalTrainer
                     }
                     count++;
                 }
-                SetStatus($"{count} hayvan evcilleştirildi, eğitildi ve doyuruldu!");
+                SetStatus(L(
+                    $"{count} animals tamed, trained, and fed!",
+                    $"{count} hayvan evcilleştirildi, eğitildi ve doyuruldu!"));
             }
             catch (Exception ex)
             {
-                SetStatus("Hayvan evcilleştirme hatası: " + ex.Message, ex);
+                SetStatus(L("Animal taming error: ", "Hayvan evcilleştirme hatası: ") + ex.Message, ex);
             }
         }
 
@@ -2031,14 +2136,14 @@ namespace GoingMedievalTrainer
             {
                 if (!IsInActiveGameplay() || !MonoSingleton<AnimalManager>.IsInstantiated())
                 {
-                    SetStatus("Aktif harita veya AnimalManager bulunamadı!");
+                    SetStatus(L("Active map or AnimalManager not found!", "Aktif harita veya AnimalManager bulunamadı!"));
                     return;
                 }
 
                 var worker = WorkerManager.LabourersHere.FirstOrDefault(w => w != null && !w.HasDisposed);
                 if (worker == null)
                 {
-                    SetStatus("Haritada aktif köylü bulunamadı!");
+                    SetStatus(L("No active settler found on the map!", "Haritada aktif köylü bulunamadı!"));
                     return;
                 }
 
@@ -2100,13 +2205,17 @@ namespace GoingMedievalTrainer
                     spawnedCount++;
                 }
 
-                string modeStr = _animalSpawnMode == 0 ? "Yabani (Wild)" : (_animalSpawnMode == 1 ? "Ehli (Domestic)" : "Evcil (Pet)");
-                string workerName = worker.Info != null ? worker.Info.GetFullName() : "köylü";
-                SetStatus($"+{spawnedCount} adet {displayLabel} [{modeStr}] ({workerName} yanına) oluşturuldu!");
+                string modeStr = _animalSpawnMode == 0
+                    ? L("Wild", "Yabani (Wild)")
+                    : (_animalSpawnMode == 1 ? L("Domestic", "Ehli (Domestic)") : L("Trained Pet", "Evcil (Pet)"));
+                string workerName = worker.Info != null ? worker.Info.GetFullName() : L("settler", "köylü");
+                SetStatus(L(
+                    $"+{spawnedCount} {displayLabel} [{modeStr}] spawned next to {workerName}!",
+                    $"+{spawnedCount} adet {displayLabel} [{modeStr}] ({workerName} yanına) oluşturuldu!"));
             }
             catch (Exception ex)
             {
-                SetStatus($"Hayvan oluşturma hatası ({animalId}): {ex.Message}", ex);
+                SetStatus(L($"Animal spawn error ({animalId}): {ex.Message}", $"Hayvan oluşturma hatası ({animalId}): {ex.Message}"), ex);
             }
         }
 
@@ -2132,7 +2241,7 @@ namespace GoingMedievalTrainer
             try
             {
                 Time.timeScale = scale;
-                SetStatus($"Oyun Hızı (TimeScale): {scale:0.#}x olarak ayarlandı.");
+                SetStatus(L($"Game Speed (TimeScale) set to {scale:0.#}x.", $"Oyun Hızı (TimeScale): {scale:0.#}x olarak ayarlandı."));
             }
             catch { }
         }
@@ -2144,12 +2253,12 @@ namespace GoingMedievalTrainer
                 if (MonoSingleton<WeatherManager>.IsInstantiated())
                 {
                     MonoSingleton<WeatherManager>.Instance.DebugSetDayTime(percent);
-                    SetStatus($"Günün saati %{percent * 100f:0} noktasına ayarlandı.");
+                    SetStatus(L($"Time of day set to {percent * 100f:0}%.", $"Günün saati %{percent * 100f:0} noktasına ayarlandı."));
                 }
             }
             catch (Exception ex)
             {
-                SetStatus("Saat değiştirme hatası: " + ex.Message, ex);
+                SetStatus(L("Time change error: ", "Saat değiştirme hatası: ") + ex.Message, ex);
             }
         }
 
@@ -2160,13 +2269,16 @@ namespace GoingMedievalTrainer
                 if (MonoSingleton<WeatherManager>.IsInstantiated())
                 {
                     MonoSingleton<WeatherManager>.Instance.DebugSetSeasonTime(seasonIndex, 0.1f);
-                    string[] names = { "İlkbahar", "Yaz", "Sonbahar", "Kış" };
-                    SetStatus($"Mevsim [{names[seasonIndex]}] olarak değiştirildi!");
+                    string[] namesEN = { "Spring", "Summer", "Autumn", "Winter" };
+                    string[] namesTR = { "İlkbahar", "Yaz", "Sonbahar", "Kış" };
+                    SetStatus(L(
+                        $"Season changed to [{namesEN[seasonIndex]}]!",
+                        $"Mevsim [{namesTR[seasonIndex]}] olarak değiştirildi!"));
                 }
             }
             catch (Exception ex)
             {
-                SetStatus("Mevsim değiştirme hatası: " + ex.Message, ex);
+                SetStatus(L("Season change error: ", "Mevsim değiştirme hatası: ") + ex.Message, ex);
             }
         }
 
@@ -2297,7 +2409,7 @@ namespace GoingMedievalTrainer
             {
                 if (!MonoSingleton<WeatherManager>.IsInstantiated())
                 {
-                    SetStatus("WeatherManager aktif değil (önce haritaya girin).");
+                    SetStatus(L("WeatherManager is not active (enter a map first).", "WeatherManager aktif değil (önce haritaya girin)."));
                     return;
                 }
 
@@ -2306,7 +2418,9 @@ namespace GoingMedievalTrainer
                 if (weatherEvent == "clear")
                 {
                     int ended = ClearAllActiveWeatherInternal(wm);
-                    SetStatus($"Hava [Açık / Güneşli] yapıldı! ({ended} aktif yağış/fırtına olayı sonlandırıldı)");
+                    SetStatus(L(
+                        $"Weather set to [Clear / Sunny]! ({ended} active weather/storm events terminated)",
+                        $"Hava [Açık / Güneşli] yapıldı! ({ended} aktif yağış/fırtına olayı sonlandırıldı)"));
                     return;
                 }
 
@@ -2316,23 +2430,24 @@ namespace GoingMedievalTrainer
                     if (MonoSingleton<NSMedieval.GameEventSystem.GameEventSystem>.IsInstantiated())
                     {
                         MonoSingleton<NSMedieval.GameEventSystem.GameEventSystem>.Instance.StartEvent("game_event_thunderstorm");
-                        SetStatus("Hava durumu [⛈ Gök Gürültülü Fırtına (game_event_thunderstorm)] olarak başlatıldı!");
+                        SetStatus(L(
+                            "Weather [⛈ Thunderstorm (game_event_thunderstorm)] started!",
+                            "Hava durumu [⛈ Gök Gürültülü Fırtına (game_event_thunderstorm)] olarak başlatıldı!"));
                     }
                     else
                     {
-                        SetStatus("GameEventSystem bulunamadı!");
+                        SetStatus(L("GameEventSystem not found!", "GameEventSystem bulunamadı!"));
                     }
                     return;
                 }
 
-                // rain, fog, snow: Önce mevcut çakışan hava olaylarını temizle, ardından fade-in süresini atlayarak anında %100 yoğunlukta başlat
                 ClearAllActiveWeatherInternal(wm);
                 var dateObj = GlobalSaveController.CurrentVillageData?.DateAndTime;
                 MethodInfo miForceStart = typeof(WeatherManager).GetMethod("ForceStartEvent", BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.Public);
                 if (dateObj != null && miForceStart != null)
                 {
                     long minInHour = dateObj.MinutesInHour > 0 ? dateObj.MinutesInHour : 60L;
-                    long startMin = dateObj.MinutesTotal - (minInHour * 2L); // 1.4 saatlik fadeIn süresini atlamak için 2 saat geriden başlat
+                    long startMin = dateObj.MinutesTotal - (minInHour * 2L);
                     long durationMin = minInHour * 8L;
                     miForceStart.Invoke(wm, new object[] { weatherEvent, startMin, durationMin, true });
                 }
@@ -2341,11 +2456,13 @@ namespace GoingMedievalTrainer
                     wm.DebugForceWeatherEvent(weatherEvent);
                 }
 
-                SetStatus($"Hava durumu [{weatherEvent}] anında %100 yoğunlukla başlatıldı!");
+                SetStatus(L(
+                    $"Weather [{weatherEvent}] started immediately at 100% intensity!",
+                    $"Hava durumu [{weatherEvent}] anında %100 yoğunlukla başlatıldı!"));
             }
             catch (Exception ex)
             {
-                SetStatus("Hava durumu hatası: " + ex.Message, ex);
+                SetStatus(L("Weather error: ", "Hava durumu hatası: ") + ex.Message, ex);
             }
         }
 
@@ -2361,22 +2478,24 @@ namespace GoingMedievalTrainer
                     if (isActive)
                     {
                         dtv.CloseDevToolsPanel();
-                        SetStatus("Orijinal Geliştirici Paneli kapatıldı.");
+                        SetStatus(L("Native Developer Panel closed.", "Orijinal Geliştirici Paneli kapatıldı."));
                     }
                     else
                     {
                         dtv.Open();
-                        SetStatus("Orijinal Geliştirici Paneli (DeveloperToolsView) açıldı!");
+                        SetStatus(L("Native Developer Panel (DeveloperToolsView) opened!", "Orijinal Geliştirici Paneli (DeveloperToolsView) açıldı!"));
                     }
                 }
                 else
                 {
-                    SetStatus("DeveloperToolsView henüz sahnede aktif değil (önce haritaya girin).");
+                    SetStatus(L(
+                        "DeveloperToolsView is not active in the scene yet (enter a map first).",
+                        "DeveloperToolsView henüz sahnede aktif değil (önce haritaya girin)."));
                 }
             }
             catch (Exception ex)
             {
-                SetStatus("DevTools hatası: " + ex.Message, ex);
+                SetStatus(L("DevTools error: ", "DevTools hatası: ") + ex.Message, ex);
             }
         }
 
@@ -2387,7 +2506,9 @@ namespace GoingMedievalTrainer
                 if (string.IsNullOrWhiteSpace(rawInput)) return;
                 if (!MonoSingleton<DeveloperConsoleController>.IsInstantiated())
                 {
-                    SetStatus("Konsol kontrolcüsü henüz hazır değil (önce haritaya girin).");
+                    SetStatus(L(
+                        "Console controller is not ready yet (enter a map first).",
+                        "Konsol kontrolcüsü henüz hazır değil (önce haritaya girin)."));
                     return;
                 }
 
@@ -2404,11 +2525,11 @@ namespace GoingMedievalTrainer
                     string[] args = parts.Skip(1).ToArray();
                     dcc.ParseCommand(cmd, args);
                 }
-                SetStatus($"Komut çalıştırıldı: {rawInput}");
+                SetStatus(L($"Command executed: {rawInput}", $"Komut çalıştırıldı: {rawInput}"));
             }
             catch (Exception ex)
             {
-                SetStatus("Komut hatası: " + ex.Message, ex);
+                SetStatus(L("Command error: ", "Komut hatası: ") + ex.Message, ex);
             }
         }
     }

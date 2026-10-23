@@ -66,52 +66,56 @@ Copy-Item "$projDir\GoingMedievalTrainer.dll" "$stageDir\BepInEx\TrainerHotReloa
 
 $readme = @"
 ========================================================================
-   GOING MEDIEVAL - MEGA TRAINER (TR) v1.4.0 - KURULUM KILAVUZU
+   GOING MEDIEVAL - MEGA TRAINER (EN / TR) v1.5.0 - INSTALLATION GUIDE
 ========================================================================
 
-1. KURULUM (TEK ADIM - DERLEME VEYA EK PROGRAM GEREKTİRMEZ)
+1. INSTALLATION (ONE STEP - NO EXTRA TOOLS NEEDED)
 ------------------------------------------------------------------------
-Bu ZIP dosyasının içindeki TÜM dosya ve klasörleri:
-  - BepInEx (klasör)
+Extract ALL files and folders inside this ZIP archive:
+  - BepInEx (folder)
   - winhttp.dll
   - doorstop_config.ini
 
-doğrudan bilgisayarınızdaki "Going Medieval.exe" dosyasının bulunduğu
-oyun ana klasörünün içine çıkartın (kopyalayın):
+directly into your "Going Medieval.exe" root game folder:
 
-  * Epic Games varsayılan yolu:
+  * Epic Games default path:
     C:\Program Files\Epic Games\GoingMedieval\
 
-  * Steam varsayılan yolu:
+  * Steam default path:
     C:\Program Files (x86)\Steam\steamapps\common\Going Medieval\
 
-2. KULLANIM VE KISAYOL TUŞLARI
+2. USAGE, LANGUAGE SWITCH & HOTKEYS
 ------------------------------------------------------------------------
-Oyunu normal şekilde başlatın. Oyun açıldığında sol üstte "Mega Trainer [F1]"
-rozetini göreceksiniz.
+Launch the game normally. You will see the "Mega Trainer v1.5.0 [F1]" badge
+in the top-left corner.
+* Default language is English (EN). Click "🌐 Lang: EN ➔ TR" in the top bar
+  to switch between English and Turkish at any time!
 
-  [F1] veya [Insert] : Trainer Menüsünü Aç / Kapat
-  [F2]               : Oyunun Gizli Geliştirici Panelini Aç / Kapat
-  [F3]               : Köylü Ölümsüzlük & Otomatik Tedavi Aç / Kapat
-  [F4]               : Sonsuz İhtiyaçlar & %100 Moral Aç / Kapat
-  [F5]               : Anında İnşaat + Kaynaksız İnşa + Anında Kazı Aç / Kapat
-  [F6]               : Haritadaki Tüm Mavi İnşaat Planlarını Bitir
-  [F7]               : Depodaki Tüm Yığınları Maksimuma Doldur & Tazeliği %100 Yap
-  [F8]               : Haritadaki Tüm Düşmanları Anında Öldür
-  [F9]               : Canlı Yenile (Hot-Reload - Oyunu kapatmadan yeni sürümü yükler)
+  [F1] or [Insert] : Open / Close Trainer Menu
+  [F2]             : Open / Close Native Hidden Developer Panel
+  [F3]             : Settler God Mode & Auto-Heal ON / OFF
+  [F4]             : Infinite Needs & 100% Mood ON / OFF
+  [F5]             : Instant Build + Free Build + Instant Dig/Cut ON / OFF
+  [F6]             : Finish All Construction Blueprints on Map
+  [F7]             : Refill All Stockpiles to Max & 100% Freshness
+  [F8]             : Kill All Enemies on Map
+  [F9]             : Live Hot-Reload (loads new updates without restarting)
 
-3. KALDIRMA (UNINSTALL)
-------------------------------------------------------------------------
-Trainer'ı tamamen kaldırmak isterseniz oyun klasöründeki:
-  - winhttp.dll
-  - doorstop_config.ini
-  - BepInEx klasörü
-dosyalarını silmeniz yeterlidir. Oyun orijinal haline döner.
+========================================================================
+   TÜRKÇE KURULUM VE KULLANIM KILAVUZU
+========================================================================
+1. Bu ZIP içindeki tüm dosyaları (BepInEx, winhttp.dll, doorstop_config.ini)
+   "Going Medieval.exe" dosyasının bulunduğu oyun ana klasörüne kopyalayın.
+2. Oyunu başlatıp [F1] tuşuna basın. Menü varsayılan olarak İngilizce açılır;
+   sağ üstteki "🌐 Lang: EN ➔ TR" butonuna tıklayarak Türkçe'ye geçebilirsiniz.
 ========================================================================
 "@
-Set-Content -Path "$stageDir\KURULUM_OKU_BENI.txt" -Value $readme -Encoding UTF8
+Set-Content -Path "$stageDir\README_INSTALL.txt" -Value $readme -Encoding UTF8
 
-$zipPath = Join-Path $projDir "GoingMedieval_MegaTrainer_TR_v1.4.0.zip"
+$oldZip = Join-Path $projDir "GoingMedieval_MegaTrainer_TR_v1.4.0.zip"
+if (Test-Path $oldZip) { Remove-Item $oldZip -Force }
+
+$zipPath = Join-Path $projDir "GoingMedieval_MegaTrainer_v1.5.0_EN_TR.zip"
 if (Test-Path $zipPath) { Remove-Item $zipPath -Force }
 Compress-Archive -Path "$stageDir\*" -DestinationPath $zipPath -Force
 Remove-Item $stageDir -Recurse -Force
